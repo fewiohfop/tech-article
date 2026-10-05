@@ -1,0 +1,6 @@
+{
+  "_说明": "把本文件复制为 config.json，改成你机器上的实际路径。config.json 已被 .gitignore 排除，不会进版本库。三项都可省 —— 省了就走环境变量，再没有才用代码内置默认。优先级：CLI 参数 > 环境变量 > config.json > 内置默认。",
+  "xhs_dir": "C:/小红书",
+  "dy_dir": "C:/抖音",
+  "index_out": "C:/小红书/内容成品总索引.html"
+}

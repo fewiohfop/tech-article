@@ -1,0 +1,22 @@
+# 统一换行符，避免两台设备之间来回转换造成整文件 diff。
+# 仓库内一律存 LF；Windows 批处理保留 CRLF。
+#
+# 本机 core.autocrlf=true，若不显式声明，Windows 上检出的 CRLF 文件
+# 推到 Linux 云端后，带 shebang 的脚本可能出现 bad interpreter。
+# 显式写死 LF 可消除这类环境差异。
+
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# 二进制不作转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.zip   binary
+*.ttf   binary
+*.ttc   binary
+*.otf   binary

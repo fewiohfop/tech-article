@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="neon">
+<head>
+<meta charset="UTF-8">
+<title>抖音图文卡片模板 · 3:4 · 5 套主题可混用</title>
+<style>
+/* =========================================================================
+   抖音图文卡片模板  (1080×1440 → 渲染 scale=2 → 2160×2880)
+
+   与小红书模板的四处结构差异（不要在改写时抹掉）：
+     1. 页码是 "01/09" 连号格式，让读者知道总共几张、还差几张
+     2. 封面底部有「左滑看完全部 N 张」的滑动提示 —— 抖音是滑动交互，要明示
+     3. 字号整体比小红书大一号、单页信息量少一档（抖音快滑，字少才看得完）
+     4. 末页底部除来源外多一行「互动引导」，抖音的评论权重高
+
+   主题系统：
+     整篇一套  → 改 <html data-theme="...">  ：neon(默认) | flare | aurora | acid | crimson
+     单卡混用  → <div class="card cover" data-theme="flare">
+     只改局部  → <div class="card" style="--acc-c:#7C3AED">
+
+   不要改类名与 DOM 结构（render.cjs 依赖 .card 与 data-export）。
+   ========================================================================= */
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:#E5E7EB;
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI","Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","Source Han Sans CN","WenQuanYi Micro Hei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:40px 0;
+  }
+  .card{width:1080px;height:1440px;position:relative;overflow:hidden;margin:0 auto 44px}
+
+  /* ============ 主题变量 ============ */
+
+  /* --- neon · 霓虹青（默认，硬核科技）--- */
+  :root{
+    --cv-bg:#08090C;
+    --cv-tex:repeating-linear-gradient(74deg,#14171E 0 2px,transparent 2px 54px);
+    --cv-tex-size:auto; --cv-tex-op:1;
+    --cv-glow:#0E7490; --cv-glow-op:.46;
+    --cv-chip-bg:rgba(34,211,238,.14); --cv-chip-bd:rgba(34,211,238,.42); --cv-chip-fg:#67E8F9;
+    --cv-kicker:#22D3EE; --cv-title:#FFFFFF; --cv-title2:#22D3EE; --cv-line:#22D3EE;
+    --cv-desc:#AFC3D6; --cv-idx-fg:#5B7A8C;
+    --cv-stat-bd:#1B2530; --cv-stat-b:#22D3EE; --cv-stat-span:#5B7A8C;
+    --in-bg:#FFFFFF;
+    --in-title:#0F172A; --in-brand:#0E7490; --in-brand-em:#9CA3AF;
+    --in-idx:#C7CBD1; --in-sub:#6B7280; --in-rule:#0E7490; --in-rule-w:84px;
+    --item-bd:#0E7490; --item-t:#111827; --item-d:#4B5563;
+    --dot:#0E7490; --txt:#374151;
+    --acc:#0E7490; --hl:#0F172A; --hl-red:#B4232A;
+    --data-bg:#ECFCFF; --data-sub:#6B7280;
+    --rank-bd:#EEF1F5; --rank-me-bg:#F2FBFD; --foot:#9CA3AF;
+  }
+
+  /* --- flare · 烈焰橙红（争议 / 反转 / 打脸）--- */
+  [data-theme="flare"]{
+    --cv-bg:#120806;
+    --cv-tex:radial-gradient(circle at 78% 12%,#3A1408 0,transparent 46%);
+    --cv-tex-size:auto; --cv-tex-op:1;
+    --cv-glow:#B91C1C; --cv-glow-op:.5;
+    --cv-chip-bg:rgba(251,146,60,.16); --cv-chip-bd:rgba(251,146,60,.46); --cv-chip-fg:#FDBA74;
+    --cv-kicker:#FB923C; --cv-title:#FFFFFF; --cv-title2:#FB923C; --cv-line:#FB923C;
+    --cv-desc:#D8C2B4; --cv-idx-fg:#8A6A58;
+    --cv-stat-bd:#33201A; --cv-stat-b:#FB923C; --cv-stat-span:#8A6A58;
+    --in-bg:#FFFCFA;
+    --in-title:#1C1210; --in-brand:#C2410C; --in-brand-em:#A8A29E;
+    --in-idx:#DCD2CE; --in-sub:#78716C; --in-rule:#C2410C; --in-rule-w:104px;
+    --item-bd:#C2410C; --item-t:#1C1210; --item-d:#57534E;
+    --dot:#C2410C; --txt:#44403C;
+    --acc:#C2410C; --hl:#1C1210; --hl-red:#9F1239;
+    --data-bg:#FFF2E9; --data-sub:#78716C;
+    --rank-bd:#F2E7E1; --rank-me-bg:#FFF6F0; --foot:#A8A29E;
+  }
+
+  /* --- aurora · 极光蓝紫（产品发布 / 工具）--- */
+  [data-theme="aurora"]{
+    --cv-bg:#0A0A1A;
+    --cv-tex:radial-gradient(circle,#201C42 1.7px,transparent 1.7px);
+    --cv-tex-size:52px 52px; --cv-tex-op:.9;
+    --cv-glow:#4338CA; --cv-glow-op:.52;
+    --cv-chip-bg:rgba(129,140,248,.16); --cv-chip-bd:rgba(129,140,248,.46); --cv-chip-fg:#A5B4FC;
+    --cv-kicker:#818CF8; --cv-title:#FFFFFF; --cv-title2:#818CF8; --cv-line:#818CF8;
+    --cv-desc:#BEC3E0; --cv-idx-fg:#6E7099;
+    --cv-stat-bd:#1F1F44; --cv-stat-b:#818CF8; --cv-stat-span:#6E7099;
+    --in-bg:#FDFCFF;
+    --in-title:#1E1B2E; --in-brand:#4338CA; --in-brand-em:#A1A1AA;
+    --in-idx:#D4D4D8; --in-sub:#71717A; --in-rule:#4338CA; --in-rule-w:84px;
+    --item-bd:#4338CA; --item-t:#18181B; --item-d:#52525B;
+    --dot:#4338CA; --txt:#3F3F46;
+    --acc:#4338CA; --hl:#18181B; --hl-red:#BE123C;
+    --data-bg:#F2F1FF; --data-sub:#71717A;
+    --rank-bd:#EDECFA; --rank-me-bg:#F6F5FF; --foot:#A1A1AA;
+  }
+
+  /* --- acid · 酸性绿（数据 / 榜单 / 硬核干货）--- */
+  [data-theme="acid"]{
+    --cv-bg:#0A0F08;
+    --cv-tex:linear-gradient(#1B2A14 1px,transparent 1px),linear-gradient(90deg,#1B2A14 1px,transparent 1px);
+    --cv-tex-size:76px 76px; --cv-tex-op:.62;
+    --cv-glow:#3F6212; --cv-glow-op:.52;
+    --cv-chip-bg:rgba(163,230,53,.14); --cv-chip-bd:rgba(163,230,53,.42); --cv-chip-fg:#BEF264;
+    --cv-kicker:#A3E635; --cv-title:#FFFFFF; --cv-title2:#A3E635; --cv-line:#A3E635;
+    --cv-desc:#C2D3B2; --cv-idx-fg:#66804D;
+    --cv-stat-bd:#22301A; --cv-stat-b:#A3E635; --cv-stat-span:#66804D;
+    --in-bg:#FCFEF8;
+    --in-title:#131A0B; --in-brand:#4D7C0F; --in-brand-em:#A1A1AA;
+    --in-idx:#D5DCC9; --in-sub:#71717A; --in-rule:#4D7C0F; --in-rule-w:84px;
+    --item-bd:#4D7C0F; --item-t:#131A0B; --item-d:#52525B;
+    --dot:#4D7C0F; --txt:#3F3F46;
+    --acc:#4D7C0F; --hl:#131A0B; --hl-red:#B4232A;
+    --data-bg:#F2FAE4; --data-sub:#71717A;
+    --rank-bd:#E8EFDD; --rank-me-bg:#F6FBEC; --foot:#A1A1AA;
+  }
+
+  /* --- crimson · 猩红（强观点 / 辟谣 / 冲突）--- */
+  [data-theme="crimson"]{
+    --cv-bg:#0F0709;
+    --cv-tex:linear-gradient(90deg,#BE123C 0 9px,transparent 9px),repeating-linear-gradient(0deg,#22131A 0 1px,transparent 1px 88px);
+    --cv-tex-size:auto; --cv-tex-op:1;
+    --cv-glow:#BE123C; --cv-glow-op:.44;
+    --cv-chip-bg:rgba(244,63,94,.16); --cv-chip-bd:rgba(244,63,94,.48); --cv-chip-fg:#FDA4AF;
+    --cv-kicker:#FB7185; --cv-title:#FFFFFF; --cv-title2:#FB7185; --cv-line:#FB7185;
+    --cv-desc:#D2C0C6; --cv-idx-fg:#7E6570;
+    --cv-stat-bd:#2A161D; --cv-stat-b:#FB7185; --cv-stat-span:#7E6570;
+    --in-bg:#FFFFFF;
+    --in-title:#18181B; --in-brand:#BE123C; --in-brand-em:#A1A1AA;
+    --in-idx:#D4D4D8; --in-sub:#71717A; --in-rule:#BE123C; --in-rule-w:118px;
+    --item-bd:#BE123C; --item-t:#18181B; --item-d:#52525B;
+    --dot:#BE123C; --txt:#3F3F46;
+    --acc:#BE123C; --hl:#18181B; --hl-red:#7F1D1D;
+    --data-bg:#FFF1F3; --data-sub:#71717A;
+    --rank-bd:#F1E7E8; --rank-me-bg:#FFF5F6; --foot:#A1A1AA;
+  }
+
+  /* --- 警示框：跨主题统一琥珀色，保证醒目（合规提示不跟主题变）--- */
+  [data-theme],:root{--warn-bg:#FEF6E7;--warn-bd:#B45309;--warn-c:#7C4A0A}
+
+  /* ===================== 封面（深色）===================== */
+  .cover{
+    background:var(--cv-bg);color:#FFFFFF;
+    padding:86px 84px 78px;
+    display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .cv-grid{position:absolute;inset:0;background-image:var(--cv-tex);background-size:var(--cv-tex-size);opacity:var(--cv-tex-op)}
+  .cv-glow{
+    position:absolute;width:800px;height:800px;border-radius:50%;
+    background:var(--cv-glow);filter:blur(155px);opacity:var(--cv-glow-op);
+    right:-270px;top:-250px;
+  }
+  .cv-head,.cv-body,.cv-foot{position:relative;z-index:2}
+  .cv-head{display:flex;justify-content:space-between;align-items:center}
+  .cv-chip{
+    background:var(--cv-chip-bg);border:1px solid var(--cv-chip-bd);
+    color:var(--cv-chip-fg);font-size:27px;font-weight:600;letter-spacing:2px;
+    padding:14px 32px;border-radius:100px;
+  }
+  /* 抖音特有：连号页码，让读者一眼知道总量 */
+  .cv-idx{
+    font-family:"Consolas","Courier New",monospace;
+    font-size:30px;font-weight:700;color:var(--cv-idx-fg);letter-spacing:1px;
+  }
+  .cv-kicker{font-size:40px;font-weight:700;color:var(--cv-kicker);letter-spacing:9px;margin-bottom:28px}
+  .cv-title{font-size:128px;font-weight:700;line-height:1.02;letter-spacing:-3px;color:var(--cv-title)}
+  .cv-title2{font-size:128px;font-weight:700;line-height:1.02;letter-spacing:-3px;color:var(--cv-title2)}
+  .cv-line{width:118px;height:10px;background:var(--cv-line);border-radius:5px;margin:50px 0 40px}
+  .cv-desc{font-size:46px;line-height:1.5;color:var(--cv-desc);font-weight:400;letter-spacing:.5px}
+  .cv-stats{display:flex;gap:54px;border-top:1px solid var(--cv-stat-bd);padding-top:46px}
+  .cv-stat b{display:block;font-size:58px;font-weight:700;color:var(--cv-stat-b);line-height:1.15;letter-spacing:-1px}
+  .cv-stat span{display:block;font-size:24px;color:var(--cv-stat-span);margin-top:10px}
+  /* 抖音特有：滑动提示 */
+  .cv-swipe{
+    margin-top:34px;font-size:26px;font-weight:600;color:var(--cv-chip-fg);
+    letter-spacing:1px;display:flex;align-items:center;gap:12px;
+  }
+  .cv-swipe i{font-style:normal;animation:none}
+
+  /* ===================== 内页（浅色）===================== */
+  .inner{
+    background:var(--in-bg);color:var(--in-title);
+    padding:88px 84px 78px;
+    display:flex;flex-direction:column;
+  }
+  .in-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:56px}
+  .in-brand{font-size:26px;font-weight:600;color:var(--in-brand);letter-spacing:1.5px}
+  .in-brand em{font-style:normal;color:var(--in-brand-em);font-weight:400}
+  .in-idx{
+    font-family:"Consolas","Courier New",monospace;
+    font-size:27px;color:var(--in-idx);font-weight:700;letter-spacing:1px;
+  }
+  /* 字号比小红书模板大一号：抖音快滑，大字才留得住 */
+  .in-title{font-size:68px;font-weight:700;line-height:1.26;letter-spacing:-1.5px;color:var(--in-title);margin-bottom:20px}
+  .in-sub{font-size:30px;color:var(--in-sub);line-height:1.6;margin-bottom:50px}
+  .in-rule{width:var(--in-rule-w);height:8px;background:var(--in-rule);border-radius:4px;margin-bottom:48px}
+  .in-items{flex:1;display:flex;flex-direction:column;gap:52px}
+
+  .item{border-left:7px solid var(--item-bd);padding-left:32px}
+  .item-t{font-size:36px;font-weight:700;color:var(--item-t);line-height:1.38;margin-bottom:14px}
+  .item-d{font-size:29px;line-height:1.68;color:var(--item-d)}
+
+  .point{display:flex;gap:24px;align-items:flex-start}
+  .point .dot{width:16px;height:16px;border-radius:50%;background:var(--dot);flex:none;margin-top:18px}
+  .point .txt{font-size:31px;line-height:1.66;color:var(--txt)}
+
+  .warn{
+    background:var(--warn-bg);border-left:7px solid var(--warn-bd);border-radius:0 8px 8px 0;
+    padding:26px 32px;font-size:28px;line-height:1.58;color:var(--warn-c);margin-bottom:46px;
+  }
+  .hl{color:var(--hl);font-weight:700}
+  .hl-blue{color:var(--acc);font-weight:700}
+  .hl-red{color:var(--hl-red);font-weight:700}
+  .num{font-family:"Consolas","Courier New",monospace;font-weight:700;color:var(--acc);font-size:33px}
+
+  .data-row{display:flex;gap:24px;margin-top:10px}
+  .data-box{flex:1;background:var(--data-bg);border-radius:12px;padding:28px 24px;text-align:center}
+  .data-box b{display:block;font-family:"Consolas","Courier New",monospace;font-size:48px;font-weight:700;color:var(--acc);line-height:1.2}
+  .data-box span{display:block;font-size:23px;color:var(--data-sub);margin-top:8px}
+
+  .rank{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--rank-bd)}
+  .rank-row{display:flex;align-items:center;gap:22px;padding:18px 0;border-bottom:1px solid var(--rank-bd)}
+  .rank-row .nm{flex:1;font-size:29px;color:var(--txt)}
+  .rank-row .sc{font-family:"Consolas","Courier New",monospace;font-size:32px;font-weight:700;color:var(--in-idx)}
+  .rank-row.me{border-left:7px solid var(--acc);padding-left:22px;margin-left:-30px;padding-right:30px;background:var(--rank-me-bg)}
+  .rank-row.me .nm{font-weight:700;color:var(--hl)}
+  .rank-row.me .sc{color:var(--acc)}
+
+  /* 末页底部：来源一行 + 互动引导一行（抖音评论权重高）*/
+  .in-foot{
+    position:absolute;left:84px;right:84px;bottom:72px;
+    border-top:1px solid var(--rank-bd);padding-top:24px;
+    display:flex;justify-content:space-between;align-items:baseline;gap:20px;
+    font-size:25px;color:var(--foot);
+  }
+  .in-foot .src{flex:none}
+  .in-foot .ask{font-size:25px;font-weight:600;color:var(--in-brand);text-align:right}
+</style>
+</head>
+<body>
+
+<!-- ============ 封面 ============ -->
+<div class="card cover" data-export="01-封面.png">
+  <div class="cv-grid"></div>
+  <div class="cv-glow"></div>
+
+  <div class="cv-head">
+    <span class="cv-chip">AI 前沿</span>
+    <span class="cv-idx">01/09</span>
+  </div>
+
+  <div class="cv-body">
+    <div class="cv-kicker">谷歌急了</div>
+    <div class="cv-title">Gemini 4 Pro</div>
+    <div class="cv-title2">突然曝光</div>
+    <div class="cv-line"></div>
+    <div class="cv-desc">16 分钟，纯代码<br>手搓一个 3D 国际空间站</div>
+  </div>
+
+  <div class="cv-foot">
+    <div class="cv-stats">
+      <div class="cv-stat"><b>7</b><span>大实测 Demo</span></div>
+      <div class="cv-stat"><b>16 分钟</b><span>生成 3D 空间站</span></div>
+      <div class="cv-stat"><b>2 个月</b><span>完成早期预训练</span></div>
+    </div>
+    <div class="cv-swipe"><i>👉</i>左滑看完全部 9 张</div>
+  </div>
+</div>
+
+<!-- ============ 内页示例：条目结构 ============ -->
+<div class="card inner" data-export="02-示例条目页.png">
+  <div class="in-head">
+    <span class="in-brand">Gemini 4 Pro <em>· 硬核实测</em></span>
+    <span class="in-idx">02/09</span>
+  </div>
+  <div class="in-title">水上飞机起飞<br>压过 Opus 5.5</div>
+  <div class="in-rule"></div>
+
+  <div class="in-items">
+    <div class="item">
+      <div class="item-t">怎么测的</div>
+      <div class="item-d">测评博主让两个模型各自用代码，生成一段「3D 浮筒飞机在水面滑行起飞」的物理模拟。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">两边的差别</div>
+      <div class="item-d">Opus 5.5 的飞机<span class="hl">机身晃动剧烈</span>、水面反馈生硬；Gemini 4 Pro 加速平稳、溅水效果逼真。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">但别急着下结论</div>
+      <div class="item-d">这是博主自发的<span class="hl-blue">个别 Prompt 对比</span>，不是统一受控评测，只能当能力信号看。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 内页示例：要点 + 数据块 + 警示框 ============ -->
+<div class="card inner" data-export="03-示例要点页.png">
+  <div class="in-head">
+    <span class="in-brand">Gemini 4 Pro <em>· 参数泄露</em></span>
+    <span class="in-idx">03/09</span>
+  </div>
+  <div class="in-title">参数与基准</div>
+  <div class="in-rule"></div>
+
+  <div class="warn">以下均为网络爆料，<span class="hl">谷歌尚未官方确认</span>。</div>
+
+  <div class="in-items">
+    <div class="point"><span class="dot"></span><span class="txt">上下文窗口爆料称 <span class="hl">1000 万 Token</span>，但各来源口径从 150 万到 1000 万不等，尚未统一</span></div>
+    <div class="data-row">
+      <div class="data-box"><b>88%</b><span>DeepSWE v1.1</span></div>
+      <div class="data-box"><b>95.3%</b><span>Terminal-bench 2.1</span></div>
+    </div>
+    <div class="point"><span class="dot"></span><span class="txt">定价传闻：输入 <span class="hl-blue">$2.25</span> / 百万 tokens，输出 <span class="hl-blue">$11.25</span> / 百万 tokens</span></div>
+  </div>
+</div>
+
+<!-- ============ 末页：来源 + 互动引导 ============ -->
+<div class="card inner" data-export="04-示例末页.png">
+  <div class="in-head">
+    <span class="in-brand">Gemini 4 Pro <em>· 冷静一下</em></span>
+    <span class="in-idx">09/09</span>
+  </div>
+  <div class="in-title">先别急着<br>封神</div>
+  <div class="in-rule"></div>
+
+  <div class="in-items" style="gap:44px">
+    <div class="item">
+      <div class="item-t">「碾压」还不能算结论</div>
+      <div class="item-d">所有对比都来自不同开发者各自的个别 Prompt，<span class="hl">不是谷歌、Anthropic 或独立机构做的统一受控测试</span>。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">参数一个都没官宣</div>
+      <div class="item-d">上下文、定价、基准分数目前<span class="hl">没有谷歌官方技术报告支撑</span>，只能标「泄露」。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">那该盯什么</div>
+      <div class="item-d">与其纠结排名，不如看两个确定信号：它已经能从一句话写到可交互成品；谷歌还把它用在了自家的智能体开发环境 <span class="hl-blue">Antigravity</span> 上。</div>
+    </div>
+  </div>
+
+  <div class="in-foot">
+    <span class="src">来源：36氪 · 新智元</span>
+    <span class="ask">你觉得这波能信几成？</span>
+  </div>
+</div>
+
+</body>
+</html>

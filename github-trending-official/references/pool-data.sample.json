@@ -1,0 +1,25 @@
+{
+ "_说明": "build_pool.py 的文案输入。抓取用脚本，文案写这里。日期与抓取时点按当日改。",
+ "date": "2026-09-30",
+ "pull_a": "2026-09-30 11:20（GMT+8）",
+ "pull_f": "2026-09-30 11:23（GMT+8）",
+ "extra_notes": "",
+ "a_desc": {
+  "owner/repo": "该条在 A 表「介绍」列的 HTML。2–3 句：官方描述 + topics/README 事实。不确定就写「官方描述为空，需先进仓库核对」，不要编。",
+  "vectorize-io/hindsight": "官方一句话定位是「<b>Hindsight: Agent Memory That Learns</b>」……"
+ },
+ "b1": [
+  ["owner/repo", "展示用短名", "语言", "一句到两句中文介绍，来自 HelloGitHub 当期页 + 官方描述。"]
+ ],
+ "b2": [
+  ["owner/repo", "展示用短名", "语言", "来自 GitHub Explore 的官方描述。"]
+ ],
+ "b3": [
+  ["产品名（非仓库）", 42, "Product Hunt 一句话说明。票数是页面上的数字，不是官方排名。"]
+ ],
+ "picks": [
+  "<b>方向 A · 周榜 Top5（一条图文）</b>：……理由。",
+  "<b>方向 B · 单项目推荐（一条图文）</b>：……理由。",
+  "<b>避开</b>：……"
+ ]
+}
