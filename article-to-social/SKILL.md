@@ -497,17 +497,28 @@ Chromium 由脚本自动扫描 Windows / Linux / macOS 常见位置，
 
 #### 出图命令（走工具链，别手写补丁脚本）
 
-工作目录 = `C:\srtwb\cards\<日期>_<主题>\`，spec 写在工作目录里：
+**出图流水线已随本skill 收进仓库**：`pipeline/` 目录，跨 Windows / Linux / macOS。
+换设备或云端第一件事跑自检，确认路径与解释器解析正确：
 
 ```bash
-cd /c/srtwb/cards && "$PY" make.py <工作目录名>            # 生成→收敛 gap→截图→回写
-"$PY" make.py <工作目录名> --tag <YYYYMMDD_主题>          # 顺带交付到两个平台目录
-python make_all.py --workers 3                # 批量，多目录并行
+python "$SKILL/pipeline/make.py" --doctor
 ```
 
-**一份内容出两个平台**：工作目录里放 `card.json`（推荐），
-`make.py` 会自动跑两遍并注入各自 `data-platform`；
+工作目录里放 spec（**推荐 `card.json` 一份内容出两平台**），然后：
+
+```bash
+P="$SKILL/pipeline"
+
+python "$P/make.py" <工作目录>                  # 生成→违禁词预检→收敛 gap→测量→截图→回写
+python "$P/make.py" <工作目录> --tag <YYYYMMDD_主题>   # 顺带交付到两平台成品目录
+python "$P/make_all.py" --root <根目录> --workers 3 # 批量，多目录并行
+```
+
+`make.py` 会按 spec 自动跑两遍并注入各自 `data-platform`；
 只有需要两平台各写各的时才退回 `xhs.json` + `douyin.json` 两份。
+
+> 交付根目录由环境变量 `XHS_DIR` / `DY_DIR` 指定；**只有传 `--tag` 时才需要**，
+> 不设则只出图不交付（非 Windows 上默认就是这种）。详见 `pipeline/README.md`。
 
 > ⚠️ **`card.json` 模式下 gap 不回写 spec** —— 两平台字号档位不同，同一个 gap 值
 > 给抖音会偏紧。`autogap` 每次运行都会重新收敛，不要手工把值写进 `card.json`。
@@ -590,15 +601,15 @@ python scripts/build_index.py
 
 | 组件 | 必需 | 说明 |
 |---|---|---|
-| **Python 3.8+** | ✅ | 跑 `check_*.py` / `build_*.py` |
-| **Pillow** | ✅ | **唯一第三方依赖** —— `check_density.py` 读 PNG 算底部留白。`pip install Pillow` |
-| **Node.js** | ✅ | 跑 `render.cjs` |
-| **playwright-core** | ✅ | 渲染依赖，需用 `NODE_PATH` 引入 |
+| **Python 3.8+** | ✅ | 跑 `pipeline/` 与 `check_*.py` / `build_*.py` |
+| **Node.js 18+** | ✅ | 跑 `pipeline/render2.cjs` |
+| **playwright-core** | ✅ | 渲染依赖，需用 `NODE_PATH` 引入（或设 `NODE_BIN` + 装到本地） |
 | **Chromium** | ✅ | 出图内核。脚本自动扫描 Windows / Linux / macOS 常见位置 |
 | 中文字体 | 必需 | 缺了中文会渲染成方块。Debian 系 `apt install fonts-noto-cjk` |
+| Pillow | 视情况 | **出图链路不需要**（`render2.cjs` 用 DOM 直测密度，不解图）。只有手动跑旧像素方案 `check_density.py` 时才要 `pip install Pillow` |
 | Git | 出图**不需要** | 只在 `git clone` / 推送时用 |
 
-> 除 Pillow 外，全部为标准库或 Node 内置模块。
+> **出图链路（`pipeline/`）只依赖标准库 + Node 内置模块**，不需要 pip 装任何东西。
 
 ### 环境自检（换设备第一条命令）
 
@@ -606,20 +617,23 @@ python scripts/build_index.py
 python scripts/env_check.py          # 本机自检
 python scripts/env_check.py --net    # 附带网络可达性
 python scripts/env_check.py --json   # 机器可读
+python pipeline/make.py --doctor     # ★ 出图链路单独自检（路径 / 解释器 / 成品根目录）
 ```
 
-它会报出 Python / Node / playwright-core / Chromium / Pillow / 中文字体 / 成品目录的实际状态，
-缺失项给可操作的解决方式。**换机器或上云端时先跑它，不要照抄任何写死的路径。**
+`env_check.py` 报出 Python / Node / playwright-core / Chromium / Pillow / 中文字体 / 成品目录的实际状态，
+`make.py --doctor` 报出流水线**实际会用到的**路径与解释器。**换机器或上云端时先跑这两个，
+不要照抄任何写死的路径。**
 
 > ⚠️ **`make.py` 的工作目录必须转绝对路径**（`os.path.abspath`）。它把 `--report` 传给
-> 在 `cwd=工作目录` 里跑的 `render2.cjs`，若传相对路径会拼成 `<工作目录>\<工作目录>\`，
+> 在 `cwd=工作目录` 里跑的 `render2.cjs`，若传相对路径会拼成 `<工作目录>\<目录>\`，
 > 报告写不出来。此时 `os.path.exists(报告)` 靠的是**上一轮的旧文件**，
 > 表现是 `gap_writeback=0` 但**静默用了陈旧数据** —— 不报错，最难查。
 > 2026-10-06 已修；改这个脚本时别把 `abspath` 去掉。
 >
 > ⚠️ 同理，**不要在任何脚本里写死 Node 版本号**（如 `versions\22.22.2-5\node.exe`）。
-> 本机升级后会变成 `-6`，路径直接失效。要读 `versions\current` 指针文件
-> （2026-10-06 已按此改，`make.py` / `build_one.py` 均是）。
+> 本机升级后会变成 `-6`，路径直接失效。`pipeline/_paths.py` 已改为
+> `NODE_BIN` → `PATH` → 读 `versions\current` 指针 → 扫版本目录。
+> **新增环境相关解析一律加到 `_paths.py`，别散在各个脚本里。**
 
 ### 跨设备时的路径覆盖
 
@@ -685,13 +699,21 @@ article-to-social/
 ├── .gitignore                      排除 config.json 等本机文件
 ├── templates/
 │   └── cards.html                  ★ 一份模板出两平台（data-platform 控制差异）
+├── pipeline/                        ★ 出图流水线（跨三平台，2026-10-06 收进仓库）
+│   ├── make.py                      ★ 主入口：构建→预检→autogap→测量→截图→回写→交付
+│   ├── build_cards.py               spec JSON → cards.html（注入 data-platform）
+│   ├── render2.cjs                  一次会话多 HTML；DOM 直测密度 + autogap
+│   ├── deliver.py                   复制 PNG 与汇总 HTML 到两平台成品目录
+│   ├── make_all.py                  批量并发
+│   ├── _paths.py                    ★ 所有路径与解释器解析（改环境只改这里）
+│   └── README.md                    命令、环境变量、依赖、已知边界
 └── scripts/
     ├── env_check.py                ★ 环境自检（换设备第一条命令）
     ├── render.cjs                  截图渲染（Chromium 定位跨三平台）
     ├── build_index.py              刷新内容成品总索引
     ├── build_preview.py            生成单文件汇总 HTML
     ├── check_copy.py               字数 / emoji / 话题个数校验
-    ├── check_density.py            卡片填充度校验（需 Pillow）
+    ├── check_density.py            卡片填充度校验（旧像素方案，需 Pillow；出图链路不走它）
     ├── check_banned_words.py       违禁词自检
     └── banned_words.json           词库（9 类）
 ```
@@ -708,17 +730,16 @@ article-to-social/
 | `why-no-autopublish.md` | 为什么发布不自动化 + 现成方案盘点 |
 | `publish-automation-quark.md` | 抖音半自动填充的完整实现（夸克本体，停在发布页） |
 
-> 📌 **关于出图工具链：本机正常，云端也已验证能出图，不动它。**
-> `build_cards.py` / `make.py` / `render2.cjs` / `deliver.py` / `make_all.py` 只存在于本机
-> `C:\srtwb\cards\`，**不进 Git 仓库**（已核实：仓库首版 `85e828d` 的 44 个文件里也没有它们，
-> **不是某次改动造成的**）。
-> - **本机**：出图流程完整可用，`make.py` 照常跑。
-> - **云端**：用户 2026-10-06 已实测**在云端成功出图**，环境（Chromium / 中文字体 / Pillow）齐备，
->   跑得通 ⓪–⑧ 全流程。
-> - **决定：不收进仓库。** 理由：① 云端已能出图，收进去没有实际收益；
->   ② 5 个脚本有 21 处本机硬编码，收进仓库得先做一轮跨设备改造；
->   ③ 合并前后出图产物 MD5 16/16 一致，改它等于引入无收益的风险。
->   哪天真需要同步工具链，再一次性做「去硬编码 + 云端对齐」两件事。
+> ✅ **出图流水线已收进本仓库的 `pipeline/` 目录**（2026-10-06，跨三平台改造完成）。
+> `make.py` / `build_cards.py` / `render2.cjs` / `deliver.py` / `make_all.py` / `_paths.py`
+> 全部在此，**不再只存在于本机**。
+> - 改造量实测：原21 处本机硬编码 → 2 处（其中 1 处是「Windows 惯例根目录」的有意默认值，
+>   非 Windows 上不生效；另 1 处在文档字符串里）。
+> - 验证：出图产物与改造前**MD5 16/16 逐字节一致**；`--tag` 交付链路落盘正常。
+> - 云端用法：`python pipeline/make.py --doctor` 先看环境，需要交付时设
+>   `XHS_DIR` / `DY_DIR`（不设则只出图不交付）。详见 `pipeline/README.md`。
+> - 依赖比想象的轻：出图链路**无第三方 Python 包**（密度用 DOM 直测，不解图，
+>   所以不需要 Pillow）。只需 Node 18+ / `playwright-core` / Chromium。
 
 ---
 

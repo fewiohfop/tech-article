@@ -30,13 +30,21 @@
 ├── article-to-social/                 # 文章/选题 → 双平台图文（入口）
 │   ├── SKILL.md                        # 工作流定义 ⓪→⑧
 │   ├── config.sample.json              # 路径配置模板（复制为 config.json）
+│   ├── pipeline/                       # ★ 出图流水线（跨三平台）
+│   │   ├── make.py                     # ★ 主入口：构建→预检→autogap→测量→截图→回写→交付
+│   │   ├── build_cards.py              # spec JSON → cards.html（注入 data-platform）
+│   │   ├── render2.cjs                 # 一次会话多 HTML；DOM 直测密度 + autogap
+│   │   ├── deliver.py                  # 复制到两平台成品目录
+│   │   ├── make_all.py                 # 批量并发
+│   │   ├── _paths.py                   # ★ 所有路径与解释器解析
+│   │   └── README.md                   # 命令 / 环境变量 / 依赖 / 已知边界
 │   ├── scripts/
 │   │   ├── env_check.py                # 环境自检（换设备第一条命令）
 │   │   ├── render.cjs                  # HTML → PNG（Chromium 定位跨三平台）
 │   │   ├── build_index.py              # 内容成品总索引（扫两平台）
 │   │   ├── build_preview.py            # 单文件汇总 HTML
 │   │   ├── check_copy.py               # 文案校验（字数 / emoji / 话题数）
-│   │   ├── check_density.py            # 卡片填充度（需 Pillow）
+│   │   ├── check_density.py            # 卡片填充度（旧像素方案，需 Pillow；出图链路不走它）
 │   │   ├── check_banned_words.py       # 违禁词
 │   │   └── banned_words.json
 │   ├── templates/
@@ -59,8 +67,8 @@
 
 | 组件 | 要求 | 备注 |
 |---|---|---|
-| Python | 3.9+ | **唯一第三方依赖是 Pillow**（`check_density.py` 读 PNG 算留白），其余全标准库 |
-| Node.js | 18+ | 用于 `render.cjs` 出图 |
+| Python | 3.9+ | **出图链路零第三方依赖**（`render2.cjs` 用 DOM 直测密度，不解图）。Pillow 只有手动跑旧像素方案 `check_density.py` 时才需要 |
+| Node.js | 18+ | 用于 `pipeline/render2.cjs` 出图 |
 | playwright-core | 任意近期版本 | `npm i playwright-core` |
 | Chromium | 约 428 MB | `npx playwright install chromium` |
 | 中文字体 | 必需 | 缺了中文会渲染成方块；Debian 系 `apt install fonts-noto-cjk` |
@@ -114,22 +122,28 @@ NODE_PATH=<含 playwright-core 的 node_modules> \
 
 Chromium 会自动扫描 Windows / macOS / Linux 的常见安装位置；也可用 `PLAYWRIGHT_BROWSERS_PATH` 显式指定根目录。找不到时会列出所有扫描过的路径。
 
-### 📌 出图工具链不在本仓库 —— 但云端已验证能出图，不动它
+### ✅ 出图流水线已收进仓库（`article-to-social/pipeline/`）
 
-`build_cards.py` / `make.py` / `render2.cjs` / `deliver.py` / `make_all.py` 只在本机
-`C:\srtwb\cards\`，**没有提交进本仓库**。已核实仓库首版（`85e828d`，44 个文件）里也没有它们
-—— **不是某次改动造成的回归**。
+`make.py` / `build_cards.py` / `render2.cjs` / `deliver.py` / `make_all.py` / `_paths.py`
+**全部在本仓库里**，跨 Windows / Linux / macOS。（2026-10-06 从本机 `C:\srtwb\cards\`
+迁入并完成去硬编码改造——此前它们从未进过仓库，仓库首版 `85e828d` 的 44 个文件里也没有。）
 
-| 环境 | 状态 |
+| 项 | 结果 |
 |---|---|
-| **本机** | ✅ 出图流程完整可用，`make.py` 照常跑 |
-| **云端** | ✅ **2026-10-06 用户实测已在云端成功出图**，环境（Chromium / 中文字体 / Pillow）齐备 |
+| 本机硬编码 | 21 处 → **2 处**（1 处是「Windows 惯例根目录」的有意默认值，非 Windows 不生效；1 处在文档字符串里） |
+| 出图一致性 | 与改造前**MD5 16/16 逐字节一致**（xhs 8 + dy 8） |
+| 交付链路 | `--tag` 实测落盘正常（PNG + 汇总 HTML 两平台各一份） |
+| Python 第三方依赖 | **零** —— 密度用 DOM 直测，不解图，所以不需要 Pillow |
 
-**决定：不收进仓库。** 理由：① 云端已能出图，收进去没有实际收益；
-② 5 个脚本有 21 处本机硬编码，收进仓库得先做一轮跨设备改造；
-③ 合并前后出图产物 MD5 16/16 一致，改它等于引入无收益的风险。
+```bash
+python pipeline/make.py --doctor     # ★ 换设备/云端第一条命令：看路径与解释器解析
+python pipeline/make.py <工作目录>                # 出图
+python pipeline/make.py <工作目录> --tag 20261005_主题   # 出图 + 交付到两平台
+```
 
-哪天真需要同步工具链，再一次性做「去硬编码 + 云端对齐」两件事。
+路径解析全集中在 `pipeline/_paths.py`，优先级 **环境变量 > 本机惯例位置**。
+交付根目录由 `XHS_DIR` / `DY_DIR` 指定，**不设则只出图不交付**（非 Windows 上默认如此）。
+详见 `pipeline/README.md`。
 
 ## 日常推送：双击 `push-to-github.bat`
 
