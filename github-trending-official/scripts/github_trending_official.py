@@ -16,11 +16,52 @@ import argparse
 import datetime
 import html
 import json
+import os
 import re
 import sys
 import time
 import urllib.error
 import urllib.request
+
+
+def _clear_stale_proxy():
+    """环境变量里的代理端口常常是失效的旧值（换VPN 节点后会变），
+    urllib 会照着它走并返回 502，导致重试退避白烧几十秒。
+
+    但不能一刀切清空 —— 2026-10-06 实测：
+      - github.com（trending 页）**直连被 SSL 中断**，必须走代理
+      - api.github.com **直连 200**，走代理反而 403/502
+    所以按域名分别决定：代理不健康就只给 github.com 装上。
+    手动强制：PROXY_PASSTHROUGH=1 保留原样，PROXY_MODE=direct 清空。
+    """
+    mode = os.environ.get("PROXY_MODE", "auto").lower()
+    if mode == "direct" or os.environ.get("PROXY_PASSTHROUGH") == "1":
+        return
+
+    def _alive(p):
+        if not p:
+            return False
+        try:
+            import socket
+            host, _, port = p.rpartition(":")
+            with socket.create_connection((host or "127.0.0.1", int(port)), timeout=2):
+                return True
+        except Exception:
+            return False
+
+    bad = [os.environ[k] for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
+           if os.environ.get(k)]
+    bad = [p for p in bad if not _alive(p)]
+    for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        if os.environ.get(k) in bad:
+            os.environ.pop(k, None)
+    if bad:
+        print("[INFO] 代理端口不通，已清空：%s" % ", ".join(sorted(set(bad))), file=sys.stderr)
+        print("[INFO] github.com 走直连；若 SSL 中断可设 PROXY_MODE=passthrough 手动指定可用代理",
+              file=sys.stderr)
+
+
+_clear_stale_proxy()
 
 BASE = "https://github.com/trending"
 UA = (
@@ -84,9 +125,22 @@ def fetch(url: str, timeout: int = 30, retries: int = 5) -> str:
             return body
         except Exception as e:  # noqa: BLE001
             last_exc = e
-            print(f"[WARN] 第 {i + 1}/{retries} 次失败：{type(e).__name__}: {e}", file=sys.stderr)
+            # 代理不通 / DNS 失败是「硬错误」，重试再多次也是同样结果。
+            # 2026-10-06 实测：失效代理下 5 次退避白烧 90 秒后仍失败。
+            # 只对「偶发」错误（超时、连接被重置、5xx）退避重试。
+            msg = str(e).lower()
+            hard = ("tunnel connection failed" in msg
+                    or "name or service not known" in msg
+                    or "nodename nor servname" in msg
+                    or "getaddrinfo failed" in msg)
+            if hard:
+                print("[ERROR] 硬错误（多为 DNS 不通），不再重试：%s: %s"
+                      % (type(e).__name__, e), file=sys.stderr)
+                raise
+            print("[WARN] 第 %d/%d 次失败：%s: %s" % (i + 1, retries, type(e).__name__, e),
+                  file=sys.stderr)
             if i < retries - 1:
-                time.sleep(2.0 * (i + 1))
+                time.sleep(1.5 * (i + 1))
     raise last_exc
 
 

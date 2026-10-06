@@ -18,9 +18,27 @@
 """
 import argparse
 import json
+import os
+import sys
 import time
 import urllib.error
 import urllib.request
+
+
+def _clear_stale_proxy():
+    """清掉换VPN 节点后残留的失效代理端口，避免 502。需保留时设 PROXY_PASSTHROUGH=1。"""
+    if os.environ.get("PROXY_PASSTHROUGH") == "1":
+        return
+    hit = []
+    for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        if os.environ.get(k):
+            hit.append("%s=%s" % (k, os.environ[k]))
+            os.environ.pop(k, None)
+    if hit:
+        print("[INFO] 已清空失效代理环境变量：%s" % ", ".join(hit), file=sys.stderr)
+
+
+_clear_stale_proxy()
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
