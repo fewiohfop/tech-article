@@ -1,7 +1,7 @@
-# 本仓库的工作树 = 本机 skills 目录，只跟踪下面三支 skill。
+# 本仓库的工作树 = 本机 skills 目录，只跟踪下面两支 skill。
 #
 # ⚠️ 安全警告：不要在本仓库执行 `git clean -xdf`。
-#    工作树根是 skills 目录，其余 39 支 skill 只是被忽略、并未被删除，
+#    工作树根是 skills 目录，其余 skill 只是被忽略、并未被删除，
 #    但 `clean -x` 会把它们一并清掉。这是本仓库唯一的危险操作。
 #
 # 写法：先排除顶层一切，再逐项放行（白名单）。
@@ -10,8 +10,7 @@
 !/.gitignore
 !/.gitattributes
 !/README.md
-!/article-to-xhs/
-!/article-to-douyin/
+!/article-to-social/
 !/github-trending-official/
 
 # 兜底：运行时产物（各 skill 目录内另有各自的 .gitignore）

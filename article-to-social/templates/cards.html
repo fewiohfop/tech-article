@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="midnight" data-platform="xhs">
+<head>
+<meta charset="UTF-8">
+<title>社交平台图文卡片模板 · 3:4 · 5 套主题 · 双平台</title>
+<style>
+/* =========================================================================
+   社交平台图文卡片模板  (1080×1440 → 渲染 scale=2 → 2160×2880)
+
+   一个模板出两个平台：<html data-platform="xhs|douyin">
+   build_cards.py 按 --platform 注入该属性；单卡可用 data-platform 局部覆盖。
+
+   -------------------------------------------------------------------------
+   一、平台差异只有 4 处（都在下面 §平台差异 里，用属性选择器控制）
+
+     | 项          | 小红书 (xhs)          | 抖音 (douyin)          |
+     |-------------|-----------------------|------------------------|
+     | 内页页码    | .in-page  "01"        | .in-idx   "01/09" 连号 |
+     | 封面右上角  | .cv-src   栏目词/日期  | .cv-idx   连号页码      |
+     | 封面底部    | 无滑动提示            | .cv-swipe「左滑看完全部」|
+     | 末页底部    | 仅来源一行            | 来源 + .ask 互动引导   |
+     | 字号档位    | 基准                    | 大一号（--fs-* 变量）   |
+
+     主题配色两平台**完全一致**（抖音不再另有一套配色）。
+     历史 spec 里出现过的小红书主题名保留为别名，见 §主题别名。
+
+   -------------------------------------------------------------------------
+   二、主题系统
+
+     1) 整篇一套：改 <html data-theme="...">，可选 5 套：
+        midnight(深蓝科技·默认) | ember(琥珀暖调) | violet(紫罗兰)
+        jade(青瓷墨绿) | vermilion(朱红高对比)
+     2) 单卡混用：<div class="card cover" data-theme="ember" ...>
+     3) 只改局部：<div class="card" style="--acc:#7C3AED">
+
+   ⚠️ 不要改类名与 DOM 结构（render.cjs 依赖 .card 与 data-export；
+      build_cards.py 依赖 .in-page / .in-idx / .cv-src / .cv-idx / .cv-swipe / .ask）。
+   ========================================================================= */
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:#E5E7EB;
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI","Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","Source Han Sans CN","WenQuanYi Micro Hei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:40px 0;
+  }
+  .card{width:1080px;height:1440px;position:relative;overflow:hidden;margin:0 auto 44px}
+
+  /* =========================================================================
+     § 平台档位 —— 「抖音比小红书大一档」的唯一开关
+     抖音快滑，字要更大、留白要更松（间距也大一档，不只是字号）。
+     想调档位改这里的变量即可，不要改下面的 font-size / padding 硬值。
+     ========================================================================= */
+  :root{
+    /* 字号 */
+    --fs-kicker:38px;   --fs-chip:26px;     --fs-corner:24px;
+    --fs-cv-title:118px; --fs-cv-desc:44px;  --fs-stat-b:56px;   --fs-stat-span:23px;
+    --fs-in-title:62px;  --fs-in-sub:29px;   --fs-in-page:25px;
+    --fs-item-t:33px;    --fs-item-d:27px;   --fs-point:29px;
+    --fs-warn:26px;      --fs-num:31px;      --fs-data-b:44px;   --fs-data-span:22px;
+    --fs-rank-nm:28px;   --fs-rank-sc:31px;  --fs-foot:24px;     --fs-swipe:26px;
+    /* 行高与字距（字号变大后要跟着松，否则会挤） */
+    --lh-cv-title:1.04;  --ls-cv-title:-2px;  --ls-kicker:8px;
+    --lh-in-title:1.28;  --ls-in-title:-1px;
+    --lh-desc:1.52;      --lh-item-t:1.4;    --lh-item-d:1.7;
+    --lh-point:1.68;     --lh-warn:1.6;
+    /* 间距 */
+    --pad-cover:96px 88px;      --pad-inner:92px 88px;
+    --chip-pad:14px 30px;
+    --glow-size:760px;          --glow-blur:150px;  --glow-right:-260px; --glow-top:-240px;
+    --head-mb:60px;             --kicker-mb:26px;  --item-t-mb:12px;
+    --line-h:9px;               --line-w:110px;  --line-m:52px 0 42px;
+    --rule-h:7px;               --rule-mb:46px;
+    --items-gap:46px;           --item-bd-w:6px;  --item-pad:30px;
+    --stat-gap:52px;            --stat-pt:52px;
+    --foot-left:88px;           --foot-bottom:74px;  --foot-pt:26px;
+    --point-gap:22px;           --dot-size:15px;     --dot-mt:17px;
+    --data-gap:22px;            --data-mt:8px;      --data-pad:26px 24px;
+    --warn-pad:24px 30px;       --warn-mb:44px;    --warn-bd-w:6px;
+    --rank-row-pad:17px 0;
+    --brand-fs:25px;
+  }
+  [data-platform="douyin"]{
+    --fs-kicker:40px;   --fs-chip:27px;     --fs-corner:30px;
+    --fs-cv-title:128px; --fs-cv-desc:46px;  --fs-stat-b:58px;   --fs-stat-span:24px;
+    --fs-in-title:68px;  --fs-in-sub:30px;   --fs-in-page:27px;
+    --fs-item-t:36px;    --fs-item-d:29px;   --fs-point:31px;
+    --fs-warn:28px;      --fs-num:33px;      --fs-data-b:48px;   --fs-data-span:23px;
+    --fs-rank-nm:29px;   --fs-rank-sc:32px;  --fs-foot:25px;     --fs-swipe:26px;
+    --lh-cv-title:1.02;  --ls-cv-title:-3px;  --ls-kicker:9px;
+    --lh-in-title:1.26;  --ls-in-title:-1.5px;
+    --lh-desc:1.5;       --lh-item-t:1.38;   --lh-item-d:1.68;
+    --lh-point:1.66;     --lh-warn:1.58;
+    --pad-cover:86px 84px 78px;  --pad-inner:88px 84px 78px;
+    --chip-pad:14px 32px;
+    --glow-size:800px;   --glow-blur:155px;   --glow-right:-270px; --glow-top:-250px;
+    --head-mb:56px;      --kicker-mb:28px;  --item-t-mb:14px;
+    --line-h:10px; --line-w:118px; --line-m:50px 0 40px;
+    --rule-h:8px;        --rule-mb:48px;
+    --items-gap:52px;    --item-bd-w:7px; --item-pad:32px;
+    --stat-gap:54px;     --stat-pt:46px;
+    --foot-left:84px;    --foot-bottom:72px;  --foot-pt:24px;
+    --point-gap:24px;    --dot-size:16px;     --dot-mt:18px;
+    --data-gap:24px;     --data-mt:10px;      --data-pad:28px 24px;
+    --warn-pad:26px 32px; --warn-mb:46px;    --warn-bd-w:7px;
+    --rank-row-pad:18px 0;
+    --brand-fs:26px;
+  }
+
+  /* ===================== 主题变量 ===================== */
+
+  /* --- midnight · 深蓝科技（默认）--- */
+  :root{
+    --cv-bg:#0B1220;
+    --cv-tex:linear-gradient(#16233A 1px,transparent 1px),linear-gradient(90deg,#16233A 1px,transparent 1px);
+    --cv-tex-size:90px 90px; --cv-tex-op:.5;
+    --cv-glow:#0E4C8A; --cv-glow-op:.42;
+    --cv-chip-bg:rgba(56,189,248,.14); --cv-chip-bd:rgba(56,189,248,.4); --cv-chip-fg:#7DD3FC;
+    --cv-kicker:#38BDF8; --cv-title:#FFFFFF; --cv-title2:#38BDF8; --cv-line:#38BDF8;
+    --cv-desc:#B8C7DB; --cv-src:#5A7799; --cv-idx:#5A7799;
+    --cv-stat-bd:#1C2A42; --cv-stat-b:#38BDF8; --cv-stat-span:#5A7799;
+    --in-bg:#FFFFFF;
+    --in-title:#0F172A; --in-brand:#185FA5; --in-brand-em:#9CA3AF;
+    --in-page:#C7CBD1; --in-idx:#C7CBD1; --in-sub:#6B7280; --in-rule:#185FA5; --in-rule-w:76px;
+    --item-bd:#185FA5; --item-t:#111827; --item-d:#4B5563;
+    --dot:#185FA5; --txt:#374151;
+    --acc:#185FA5; --hl:#0F172A; --hl-red:#B4232A;
+    --data-bg:#F1F6FC; --data-sub:#6B7280;
+    --rank-bd:#EEF1F5; --rank-me-bg:#F5F9FD; --foot:#9CA3AF;
+  }
+
+  /* --- ember · 琥珀暖调（斜线纹理）--- */
+  [data-theme="ember"]{
+    --cv-bg:#17110A;
+    --cv-tex:repeating-linear-gradient(45deg,#2B1F0E 0 2px,transparent 2px 46px);
+    --cv-tex-size:auto; --cv-tex-op:1;
+    --cv-glow:#7C2D12; --cv-glow-op:.5;
+    --cv-chip-bg:rgba(245,158,11,.15); --cv-chip-bd:rgba(245,158,11,.45); --cv-chip-fg:#FCD34D;
+    --cv-kicker:#F59E0B; --cv-title:#FFF7ED; --cv-title2:#F59E0B; --cv-line:#F59E0B;
+    --cv-desc:#D6C7B0; --cv-src:#8A7355; --cv-idx:#8A7355;
+    --cv-stat-bd:#33261A; --cv-stat-b:#F59E0B; --cv-stat-span:#8A7355;
+    --in-bg:#FFFDF8;
+    --in-title:#1C1410; --in-brand:#B45309; --in-brand-em:#A8A29E;
+    --in-page:#D6D3D1; --in-idx:#D6D3D1; --in-sub:#78716C; --in-rule:#B45309; --in-rule-w:92px;
+    --item-bd:#B45309; --item-t:#1C1410; --item-d:#57534E;
+    --dot:#B45309; --txt:#44403C;
+    --acc:#B45309; --hl:#1C1410; --hl-red:#B4232A;
+    --data-bg:#FDF3E3; --data-sub:#78716C;
+    --rank-bd:#F0E7DA; --rank-me-bg:#FDF6EA; --foot:#A8A29E;
+  }
+
+  /* --- violet · 紫罗兰（圆点阵）--- */
+  [data-theme="violet"]{
+    --cv-bg:#120B1F;
+    --cv-tex:radial-gradient(circle,#241738 1.6px,transparent 1.6px);
+    --cv-tex-size:46px 46px; --cv-tex-op:.95;
+    --cv-glow:#4C1D95; --cv-glow-op:.5;
+    --cv-chip-bg:rgba(167,139,250,.16); --cv-chip-bd:rgba(167,139,250,.45); --cv-chip-fg:#C4B5FD;
+    --cv-kicker:#A78BFA; --cv-title:#FFFFFF; --cv-title2:#A78BFA; --cv-line:#A78BFA;
+    --cv-desc:#C9BFE0; --cv-src:#7A6B99; --cv-idx:#7A6B99;
+    --cv-stat-bd:#251A3A; --cv-stat-b:#A78BFA; --cv-stat-span:#7A6B99;
+    --in-bg:#FDFCFF;
+    --in-title:#1E1B2E; --in-brand:#6D28D9; --in-brand-em:#A1A1AA;
+    --in-page:#D4D4D8; --in-idx:#D4D4D8; --in-sub:#71717A; --in-rule:#6D28D9; --in-rule-w:76px;
+    --item-bd:#6D28D9; --item-t:#18181B; --item-d:#52525B;
+    --dot:#6D28D9; --txt:#3F3F46;
+    --acc:#6D28D9; --hl:#18181B; --hl-red:#BE123C;
+    --data-bg:#F3F0FF; --data-sub:#71717A;
+    --rank-bd:#EFEBFB; --rank-me-bg:#F6F3FF; --foot:#A1A1AA;
+  }
+
+  /* --- jade · 青瓷墨绿（细密网格）--- */
+  [data-theme="jade"]{
+    --cv-bg:#06171A;
+    --cv-tex:linear-gradient(#0E2A2E 1px,transparent 1px),linear-gradient(90deg,#0E2A2E 1px,transparent 1px);
+    --cv-tex-size:38px 38px; --cv-tex-op:.85;
+    --cv-glow:#115E59; --cv-glow-op:.48;
+    --cv-chip-bg:rgba(45,212,191,.14); --cv-chip-bd:rgba(45,212,191,.42); --cv-chip-fg:#5EEAD4;
+    --cv-kicker:#2DD4BF; --cv-title:#ECFDF5; --cv-title2:#2DD4BF; --cv-line:#2DD4BF;
+    --cv-desc:#B4CFCB; --cv-src:#5C8079; --cv-idx:#5C8079;
+    --cv-stat-bd:#123033; --cv-stat-b:#2DD4BF; --cv-stat-span:#5C8079;
+    --in-bg:#F8FCFB;
+    --in-title:#0B2422; --in-brand:#0F766E; --in-brand-em:#94A3B8;
+    --in-page:#CBD5D3; --in-idx:#CBD5D3; --in-sub:#64748B; --in-rule:#0F766E; --in-rule-w:76px;
+    --item-bd:#0F766E; --item-t:#0B2422; --item-d:#4A5F5C;
+    --dot:#0F766E; --txt:#334155;
+    --acc:#0F766E; --hl:#0B2422; --hl-red:#B4232A;
+    --data-bg:#E8F5F2; --data-sub:#64748B;
+    --rank-bd:#E3EFEC; --rank-me-bg:#EFF8F6; --foot:#94A3B8;
+  }
+
+  /* --- vermilion · 朱红高对比（横带纹 + 无网格）--- */
+  [data-theme="vermilion"]{
+    --cv-bg:#101013;
+    --cv-tex:linear-gradient(90deg,#BE123C 0 8px,transparent 8px),repeating-linear-gradient(0deg,#26262E 0 1px,transparent 1px 96px);
+    --cv-tex-size:auto; --cv-tex-op:1;
+    --cv-glow:#BE123C; --cv-glow-op:.4;
+    --cv-chip-bg:rgba(244,63,94,.16); --cv-chip-bd:rgba(244,63,94,.48); --cv-chip-fg:#FDA4AF;
+    --cv-kicker:#FB7185; --cv-title:#FFFFFF; --cv-title2:#FB7185; --cv-line:#FB7185;
+    --cv-desc:#C9C9D1; --cv-src:#6B6B75; --cv-idx:#6B6B75;
+    --cv-stat-bd:#26262C; --cv-stat-b:#FB7185; --cv-stat-span:#6B6B75;
+    --in-bg:#FFFFFF;
+    --in-title:#18181B; --in-brand:#BE123C; --in-brand-em:#A1A1AA;
+    --in-page:#D4D4D8; --in-idx:#D4D4D8; --in-sub:#71717A; --in-rule:#BE123C; --in-rule-w:110px;
+    --item-bd:#BE123C; --item-t:#18181B; --item-d:#52525B;
+    --dot:#BE123C; --txt:#3F3F46;
+    --acc:#BE123C; --hl:#18181B; --hl-red:#7F1D1D;
+    --data-bg:#FFF1F2; --data-sub:#6B7280;
+    --rank-bd:#F1E7E8; --rank-me-bg:#FFF5F6; --foot:#A1A1AA;
+  }
+
+  /* --- 主题别名：抖音旧主题名 → 统一后的配色（旧 spec 不会失效）---
+     2026-10-06 合并前，抖音有另一套主题名。合并后统一到上��� 5 套，
+     旧名保留为别名指向**视觉最接近**的一套，已有 spec 无需改。 */
+  [data-theme="neon"]  {--cv-bg:#0B1220;--cv-tex:linear-gradient(#16233A 1px,transparent 1px),linear-gradient(90deg,#16233A 1px,transparent 1px);--cv-tex-size:90px 90px;--cv-tex-op:.5;--cv-glow:#0E4C8A;--cv-glow-op:.42;--cv-chip-bg:rgba(56,189,248,.14);--cv-chip-bd:rgba(56,189,248,.4);--cv-chip-fg:#7DD3FC;--cv-kicker:#38BDF8;--cv-title:#FFFFFF;--cv-title2:#38BDF8;--cv-line:#38BDF8;--cv-desc:#B8C7DB;--cv-src:#5A7799;--cv-idx:#5A7799;--cv-stat-bd:#1C2A42;--cv-stat-b:#38BDF8;--cv-stat-span:#5A7799;--in-bg:#FFFFFF;--in-title:#0F172A;--in-brand:#185FA5;--in-brand-em:#9CA3AF;--in-page:#C7CBD1;--in-idx:#C7CBD1;--in-sub:#6B7280;--in-rule:#185FA5;--in-rule-w:76px;--item-bd:#185FA5;--item-t:#111827;--item-d:#4B5563;--dot:#185FA5;--txt:#374151;--acc:#185FA5;--hl:#0F172A;--hl-red:#B4232A;--data-bg:#F1F6FC;--data-sub:#6B7280;--rank-bd:#EEF1F5;--rank-me-bg:#F5F9FD;--foot:#9CA3AF;}
+  [data-theme="flare"] {--cv-bg:#17110A;--cv-tex:repeating-linear-gradient(45deg,#2B1F0E 0 2px,transparent 2px 46px);--cv-tex-size:auto;--cv-tex-op:1;--cv-glow:#7C2D12;--cv-glow-op:.5;--cv-chip-bg:rgba(245,158,11,.15);--cv-chip-bd:rgba(245,158,11,.45);--cv-chip-fg:#FCD34D;--cv-kicker:#F59E0B;--cv-title:#FFF7ED;--cv-title2:#F59E0B;--cv-line:#F59E0B;--cv-desc:#D6C7B0;--cv-src:#8A7355;--cv-idx:#8A7355;--cv-stat-bd:#33261A;--cv-stat-b:#F59E0B;--cv-stat-span:#8A7355;--in-bg:#FFFDF8;--in-title:#1C1410;--in-brand:#B45309;--in-brand-em:#A8A29E;--in-page:#D6D3D1;--in-idx:#D6D3D1;--in-sub:#78716C;--in-rule:#B45309;--in-rule-w:92px;--item-bd:#B45309;--item-t:#1C1410;--item-d:#57534E;--dot:#B45309;--txt:#44403C;--acc:#B45309;--hl:#1C1410;--hl-red:#B4232A;--data-bg:#FDF3E3;--data-sub:#78716C;--rank-bd:#F0E7DA;--rank-me-bg:#FDF6EA;--foot:#A8A29E;}
+  [data-theme="aurora"]{--cv-bg:#120B1F;--cv-tex:radial-gradient(circle,#241738 1.6px,transparent 1.6px);--cv-tex-size:46px 46px;--cv-tex-op:.95;--cv-glow:#4C1D95;--cv-glow-op:.5;--cv-chip-bg:rgba(167,139,250,.16);--cv-chip-bd:rgba(167,139,250,.45);--cv-chip-fg:#C4B5FD;--cv-kicker:#A78BFA;--cv-title:#FFFFFF;--cv-title2:#A78BFA;--cv-line:#A78BFA;--cv-desc:#C9BFE0;--cv-src:#7A6B99;--cv-idx:#7A6B99;--cv-stat-bd:#251A3A;--cv-stat-b:#A78BFA;--cv-stat-span:#7A6B99;--in-bg:#FDFCFF;--in-title:#1E1B2E;--in-brand:#6D28D9;--in-brand-em:#A1A1AA;--in-page:#D4D4D8;--in-idx:#D4D4D8;--in-sub:#71717A;--in-rule:#6D28D9;--in-rule-w:76px;--item-bd:#6D28D9;--item-t:#18181B;--item-d:#52525B;--dot:#6D28D9;--txt:#3F3F46;--acc:#6D28D9;--hl:#18181B;--hl-red:#BE123C;--data-bg:#F3F0FF;--data-sub:#71717A;--rank-bd:#EFEBFB;--rank-me-bg:#F6F3FF;--foot:#A1A1AA;}
+  [data-theme="acid"]  {--cv-bg:#06171A;--cv-tex:linear-gradient(#0E2A2E 1px,transparent 1px),linear-gradient(90deg,#0E2A2E 1px,transparent 1px);--cv-tex-size:38px 38px;--cv-tex-op:.85;--cv-glow:#115E59;--cv-glow-op:.48;--cv-chip-bg:rgba(45,212,191,.14);--cv-chip-bd:rgba(45,212,191,.42);--cv-chip-fg:#5EEAD4;--cv-kicker:#2DD4BF;--cv-title:#ECFDF5;--cv-title2:#2DD4BF;--cv-line:#2DD4BF;--cv-desc:#B4CFCB;--cv-src:#5C8079;--cv-idx:#5C8079;--cv-stat-bd:#123033;--cv-stat-b:#2DD4BF;--cv-stat-span:#5C8079;--in-bg:#F8FCFB;--in-title:#0B2422;--in-brand:#0F766E;--in-brand-em:#94A3B8;--in-page:#CBD5D3;--in-idx:#CBD5D3;--in-sub:#64748B;--in-rule:#0F766E;--in-rule-w:76px;--item-bd:#0F766E;--item-t:#0B2422;--item-d:#4A5F5C;--dot:#0F766E;--txt:#334155;--acc:#0F766E;--hl:#0B2422;--hl-red:#B4232A;--data-bg:#E8F5F2;--data-sub:#64748B;--rank-bd:#E3EFEC;--rank-me-bg:#EFF8F6;--foot:#94A3B8;}
+  [data-theme="crimson"]{--cv-bg:#101013;--cv-tex:linear-gradient(90deg,#BE123C 0 8px,transparent 8px),repeating-linear-gradient(0deg,#26262E 0 1px,transparent 1px 96px);--cv-tex-size:auto;--cv-tex-op:1;--cv-glow:#BE123C;--cv-glow-op:.4;--cv-chip-bg:rgba(244,63,94,.16);--cv-chip-bd:rgba(244,63,94,.48);--cv-chip-fg:#FDA4AF;--cv-kicker:#FB7185;--cv-title:#FFFFFF;--cv-title2:#FB7185;--cv-line:#FB7185;--cv-desc:#C9C9D1;--cv-src:#6B6B75;--cv-idx:#6B6B75;--cv-stat-bd:#26262C;--cv-stat-b:#FB7185;--cv-stat-span:#6B6B75;--in-bg:#FFFFFF;--in-title:#18181B;--in-brand:#BE123C;--in-brand-em:#A1A1AA;--in-page:#D4D4D8;--in-idx:#D4D4D8;--in-sub:#71717A;--in-rule:#BE123C;--in-rule-w:110px;--item-bd:#BE123C;--item-t:#18181B;--item-d:#52525B;--dot:#BE123C;--txt:#3F3F46;--acc:#BE123C;--hl:#18181B;--hl-red:#7F1D1D;--data-bg:#FFF1F2;--data-sub:#6B7280;--rank-bd:#F1E7E8;--rank-me-bg:#FFF5F6;--foot:#A1A1AA;}
+
+  /* --- 警示框：跨主题统一用琥珀色，保证醒目（合规提示不跟主题变）--- */
+  [data-theme],:root{--warn-bg:#FEF6E7;--warn-bd:#B45309;--warn-c:#7C4A0A}
+
+  /* ===================== 封面（深色）===================== */
+  .cover{
+    background:var(--cv-bg);color:#FFFFFF;
+    padding:var(--pad-cover);
+    display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .cv-grid{position:absolute;inset:0;background-image:var(--cv-tex);background-size:var(--cv-tex-size);opacity:var(--cv-tex-op)}
+  .cv-glow{
+    position:absolute;width:var(--glow-size);height:var(--glow-size);border-radius:50%;
+    background:var(--cv-glow);filter:blur(var(--glow-blur));opacity:var(--cv-glow-op);
+    right:var(--glow-right);top:var(--glow-top);
+  }
+  /* 两个都列上：小红书产出 .cv-stats 包裹层，抖音产出 .cv-foot 包裹层，
+     哪个存在哪个生效，渲染结果与各自的旧模板完全一致 */
+  .cv-head,.cv-body,.cv-stats,.cv-foot{position:relative;z-index:2}
+  .cv-head{display:flex;justify-content:space-between;align-items:center}
+  .cv-chip{
+    background:var(--cv-chip-bg);border:1px solid var(--cv-chip-bd);
+    color:var(--cv-chip-fg);font-size:var(--fs-chip);font-weight:600;letter-spacing:2px;
+    padding:var(--chip-pad);border-radius:100px;
+  }
+  /* 封面右上角：小红书=.cv-src（栏目词/日期）｜抖音=.cv-idx（连号页码） */
+  .cv-src{font-size:var(--fs-corner);color:var(--cv-src);letter-spacing:.5px}
+  .cv-idx{
+    font-family:"Consolas","Courier New",monospace;
+    font-size:var(--fs-corner);font-weight:700;color:var(--cv-idx);letter-spacing:1px;
+  }
+  /* 平台差异 1：只有抖音显示连号页码，只有小红书显示 .cv-src */
+  [data-platform="xhs"] .cv-idx{display:none}
+  [data-platform="douyin"] .cv-src{display:none}
+
+  .cv-kicker{font-size:var(--fs-kicker);font-weight:700;color:var(--cv-kicker);letter-spacing:var(--ls-kicker);margin-bottom:var(--kicker-mb)}
+  .cv-title{font-size:var(--fs-cv-title);font-weight:700;line-height:var(--lh-cv-title);letter-spacing:var(--ls-cv-title);color:var(--cv-title)}
+  .cv-title2{font-size:var(--fs-cv-title);font-weight:700;line-height:var(--lh-cv-title);letter-spacing:var(--ls-cv-title);color:var(--cv-title2)}
+  .cv-line{width:var(--line-w);height:var(--line-h);background:var(--cv-line);border-radius:5px;margin:var(--line-m)}
+  .cv-desc{font-size:var(--fs-cv-desc);line-height:var(--lh-desc);color:var(--cv-desc);font-weight:400;letter-spacing:.5px}
+  .cv-stats{display:flex;gap:var(--stat-gap);border-top:1px solid var(--cv-stat-bd);padding-top:var(--stat-pt)}
+  .cv-stat b{display:block;font-size:var(--fs-stat-b);font-weight:700;color:var(--cv-stat-b);line-height:1.15;letter-spacing:-1px}
+  .cv-stat span{display:block;font-size:var(--fs-stat-span);color:var(--cv-stat-span);margin-top:10px}
+
+  /* 平台差异 2：封面滑动提示，仅抖音（抖音是滑动交互，要明示还差几张） */
+  .cv-swipe{
+    margin-top:34px;font-size:var(--fs-swipe);font-weight:600;color:var(--cv-chip-fg);
+    letter-spacing:1px;display:flex;align-items:center;gap:12px;
+  }
+  .cv-swipe i{font-style:normal}
+  [data-platform="xhs"] .cv-swipe{display:none}
+  .cv-stats + .cv-swipe{padding-top:0}
+
+  /* ===================== 内页（浅色）===================== */
+  .inner{
+    background:var(--in-bg);color:var(--in-title);
+    padding:var(--pad-inner);
+    display:flex;flex-direction:column;
+  }
+  .in-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--head-mb)}
+  .in-brand{font-size:var(--brand-fs);font-weight:600;color:var(--in-brand);letter-spacing:1.5px}
+  .in-brand em{font-style:normal;color:var(--in-brand-em);font-weight:400}
+  /* 内页页码：小红书=.in-page（"01"）｜抖音=.in-idx（"01/09" 连号） */
+  .in-page{font-size:var(--fs-in-page);color:var(--in-page);font-weight:600;letter-spacing:1px}
+  .in-idx{
+    font-family:"Consolas","Courier New",monospace;
+    font-size:var(--fs-in-page);color:var(--in-idx);font-weight:700;letter-spacing:1px;
+  }
+  [data-platform="xhs"] .in-idx{display:none}
+  [data-platform="douyin"] .in-page{display:none}
+
+  .in-title{font-size:var(--fs-in-title);font-weight:700;line-height:var(--lh-in-title);letter-spacing:var(--ls-in-title);color:var(--in-title);margin-bottom:20px}
+  .in-sub{font-size:var(--fs-in-sub);color:var(--in-sub);line-height:1.6;margin-bottom:52px}
+  .in-rule{width:var(--in-rule-w);height:var(--rule-h);background:var(--in-rule);border-radius:4px;margin-bottom:var(--rule-mb)}
+  .in-items{flex:1;display:flex;flex-direction:column;gap:var(--items-gap)}
+
+  .item{border-left:var(--item-bd-w) solid var(--item-bd);padding-left:var(--item-pad)}
+  .item-t{font-size:var(--fs-item-t);font-weight:700;color:var(--item-t);line-height:var(--lh-item-t);margin-bottom:var(--item-t-mb)}
+  .item-d{font-size:var(--fs-item-d);line-height:var(--lh-item-d);color:var(--item-d)}
+
+  .point{display:flex;gap:var(--point-gap);align-items:flex-start}
+  .point .dot{width:var(--dot-size);height:var(--dot-size);border-radius:50%;background:var(--dot);flex:none;margin-top:var(--dot-mt)}
+  .point .txt{font-size:var(--fs-point);line-height:var(--lh-point);color:var(--txt)}
+
+  .warn{
+    background:var(--warn-bg);border-left:var(--warn-bd-w) solid var(--warn-bd);border-radius:0 8px 8px 0;
+    padding:var(--warn-pad);font-size:var(--fs-warn);line-height:var(--lh-warn);color:var(--warn-c);margin-bottom:var(--warn-mb);
+  }
+  .hl{color:var(--hl);font-weight:700}
+  .hl-blue{color:var(--acc);font-weight:700}
+  .hl-red{color:var(--hl-red);font-weight:700}
+  .num{font-family:"Consolas","Courier New",monospace;font-weight:700;color:var(--acc);font-size:var(--fs-num)}
+
+  .data-row{display:flex;gap:var(--data-gap);margin-top:var(--data-mt)}
+  .data-box{flex:1;background:var(--data-bg);border-radius:12px;padding:var(--data-pad);text-align:center}
+  .data-box b{display:block;font-family:"Consolas","Courier New",monospace;font-size:var(--fs-data-b);font-weight:700;color:var(--acc);line-height:1.2}
+  .data-box span{display:block;font-size:var(--fs-data-span);color:var(--data-sub);margin-top:8px}
+
+  .rank{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--rank-bd)}
+  .rank-row{display:flex;align-items:center;gap:22px;padding:var(--rank-row-pad);border-bottom:1px solid var(--rank-bd)}
+  .rank-row .nm{flex:1;font-size:var(--fs-rank-nm);color:var(--txt)}
+  .rank-row .sc{font-family:"Consolas","Courier New",monospace;font-size:var(--fs-rank-sc);font-weight:700;color:var(--in-page)}
+  .rank-row.me{border-left:6px solid var(--acc);padding-left:22px;margin-left:-28px;padding-right:28px;background:var(--rank-me-bg)}
+  .rank-row.me .nm{font-weight:700;color:var(--hl)}
+  .rank-row.me .sc{color:var(--acc)}
+
+  /* 末页底部：来源恒在；互动引导 .ask 仅抖音（评论权重高） */
+  .in-foot{
+    position:absolute;left:var(--foot-left);right:var(--foot-left);bottom:var(--foot-bottom);
+    border-top:1px solid var(--rank-bd);padding-top:var(--foot-pt);
+    font-size:var(--fs-foot);color:var(--foot);
+  }
+  [data-platform="douyin"] .in-foot{
+    display:flex;justify-content:space-between;align-items:baseline;gap:20px;
+  }
+  [data-platform="douyin"] .in-foot .src{flex:none}
+  [data-platform="douyin"] .in-foot .ask{font-size:var(--fs-foot);font-weight:600;color:var(--in-brand);text-align:right}
+  [data-platform="xhs"] .ask{display:none}
+</style>
+</head>
+<body>
+
+<!-- ============ 封面（小红书版：右上角 .cv-src，无滑动提示）============ -->
+<div class="card cover" data-export="01-封面.png">
+  <div class="cv-grid"></div>
+  <div class="cv-glow"></div>
+
+  <div class="cv-head">
+    <span class="cv-chip">AI 前沿</span>
+    <span class="cv-src">行业事件</span>
+  </div>
+
+  <div class="cv-body">
+    <div class="cv-kicker">谷歌急了</div>
+    <div class="cv-title">Gemini 4 Pro</div>
+    <div class="cv-title2">突然曝光</div>
+    <div class="cv-line"></div>
+    <div class="cv-desc">16 分钟，纯代码<br>手搓一个 3D 国际空间站</div>
+  </div>
+
+  <div class="cv-stats">
+    <div class="cv-stat"><b>7</b><span>大实测 Demo</span></div>
+    <div class="cv-stat"><b>16 分钟</b><span>生成 3D 空间站</span></div>
+    <div class="cv-stat"><b>2 个月</b><span>完成早期预训练</span></div>
+  </div>
+</div>
+
+<!-- ============ 内页示例：条目结构（.in-page 页码）============ -->
+<div class="card inner" data-export="02-示例条目页.png">
+  <div class="in-head">
+    <span class="in-brand">Gemini 4 Pro 实测 <em>| 硬核实测</em></span>
+    <span class="in-page">01</span>
+  </div>
+  <div class="in-title">水上飞机起飞<br>压过 Opus 5.5</div>
+  <div class="in-rule"></div>
+
+  <div class="in-items">
+    <div class="item">
+      <div class="item-t">怎么测的</div>
+      <div class="item-d">测评博主让两个模型各自用代码，生成一段「3D 浮筒飞机在水面滑行起飞」的物理模拟。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">Opus 5.5 的表现</div>
+      <div class="item-d">飞机虽然在动，但<span class="hl">机身晃动剧烈</span>，仿佛随时要解体，水面的物理反馈也很生硬。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">Gemini 4 Pro 的表现</div>
+      <div class="item-d">加速平稳，水面反射清晰，对「溅水」效果的渲染很逼真。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">注意</div>
+      <div class="item-d">这是博主自发的<span class="hl-blue">个别 Prompt 对比</span>，不是双方或独立机构的统一受控评测，只能当能力信号看。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 内页示例：要点 + 数据块 + 警示框 ============ -->
+<div class="card inner" data-export="03-示例要点页.png">
+  <div class="in-head">
+    <span class="in-brand">Gemini 4 Pro 实测 <em>| 参数泄露</em></span>
+    <span class="in-page">02</span>
+  </div>
+  <div class="in-title">参数与基准</div>
+
+  <div class="warn">以下均为网络爆料与流传的测试图，<span class="hl">谷歌尚未官方确认</span>，请当作传闻看待。</div>
+
+  <div class="in-items">
+    <div class="point"><span class="dot"></span><span class="txt">上下文窗口：爆料称 <span class="hl">1000 万 Token</span>，但各来源口径从 150 万到 1000 万不等，尚未统一</span></div>
+    <div class="point"><span class="dot"></span><span class="txt">输出上限 <span class="hl">256k</span>；永久跨会话记忆，无需 API 即可联网，具备 AI Agent 能力</span></div>
+    <div class="data-row">
+      <div class="data-box"><b>88%</b><span>DeepSWE v1.1</span></div>
+      <div class="data-box"><b>95.3%</b><span>Terminal-bench 2.1</span></div>
+    </div>
+    <div class="point"><span class="dot"></span><span class="txt">定价传闻：输入 <span class="hl-blue">$2.25</span> / 百万 tokens，输出 <span class="hl-blue">$11.25</span> / 百万 tokens</span></div>
+  </div>
+</div>
+
+<!-- ============ 末页：来源（.ask 互动引导仅抖音渲染）============ -->
+<div class="card inner" data-export="04-示例末页.png">
+  <div class="in-head">
+    <span class="in-brand">Gemini 4 Pro 实测 <em>| 冷静一下</em></span>
+    <span class="in-page">03</span>
+  </div>
+  <div class="in-title">先别急着<br>封神</div>
+  <div class="in-rule"></div>
+
+  <div class="in-items" style="gap:42px">
+    <div class="item">
+      <div class="item-t">「碾压」还不能算结论</div>
+      <div class="item-d">所有对比都来自不同开发者各自的个别 Prompt，<span class="hl">不是谷歌、Anthropic 或独立机构做的统一受控测试</span>。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">参数一个都没官宣</div>
+      <div class="item-d">上下文、定价、基准分数目前<span class="hl">没有谷歌官方技术报告支撑</span>，只能标「泄露」。</div>
+    </div>
+    <div class="item">
+      <div class="item-t">那该盯什么</div>
+      <div class="item-d">与其纠结排名，不如看两个确定信号：它已经能从一句话写到可交互成品；谷歌还把它用在了自家的智能体开发环境 <span class="hl-blue">Antigravity</span> 上。</div>
+    </div>
+  </div>
+
+  <div class="in-foot">
+    <span class="src">来源：36氪 · 新智元</span>
+    <span class="ask">你觉得这波能信几成？</span>
+  </div>
+</div>
+
+<!--
+  抖音版差异演示（对照用，正常出图时 build_cards.py 会按 platform 自动派生这些字段）：
+  封面：右上角 .cv-src 换成 <span class="cv-idx">01/09</span>，底部加 <div class="cv-swipe"><i>👉</i>左滑看完全部 9 张</div>
+  内页：<span class="in-page">01</span> 换成 <span class="in-idx">02/09</span>
+  末页：.in-foot 自动变 flex 布局，.ask 参与显示
+  字号：由 [data-platform="douyin"] 的 --fs-* 变量整体上浮一档，无需改 DOM
+-->
+
+</body>
+</html>

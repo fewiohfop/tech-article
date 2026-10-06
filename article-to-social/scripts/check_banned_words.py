@@ -4,7 +4,7 @@
 发布前违禁词自检（离线，纯本地，不联网、不外传文案）
 
 用法：
-  python check_banned_words.py --meta meta_handraw_xhs.json
+  python check_banned_words.py --meta meta_xhs.json
   python check_banned_words.py --text "这段文案帮我看看"
   python check_banned_words.py --html cards.html
   python check_banned_words.py --meta a.json --meta b.json --json

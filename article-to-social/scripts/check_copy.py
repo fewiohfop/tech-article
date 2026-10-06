@@ -23,7 +23,7 @@ check_copy.py — 发布文案自检（小红书 / 抖音）：标题、正文�
 用法:
   python check_copy.py meta_xhs.json                      # 默认按小红书口径
   python check_copy.py --platform dy meta_dy.json
-  python check_copy.py --dir "C:\\Users\\xxx\\_build"
+  python check_copy.py --dir "<工作目录>"
 
 读取 meta json 里的 titles / first_lines / body / tags，输出：
   每条标题的字数（超上限标 超!）

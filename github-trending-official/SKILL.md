@@ -30,7 +30,7 @@ agent_created: true
 > **方向 A 一次出两篇**（日榜一篇、周榜一篇），但**两篇分开做、分开上传**，
 > 不要为省事把两个榜塞进同一条图文。素材可以同一批抓取，成品必须两份。
 
-**发布不含在本 skill 内**，交回 `article-to-xhs` / `article-to-douyin` 的发布环节。
+**发布不含在本 skill 内**，交回 `article-to-social` 的发布环节。
 用户 2026-09-29 明确：发布自动化「先这样」，本期不做。
 
 ---
@@ -138,9 +138,9 @@ https://github.com/<owner>/<repo>/blob/main/README.md?plain=1
 | `https://github.com/explore` | WebFetch 直读 | ✅ **服务端渲染**。含官方 Trending、Popular topic、**Collections 精选合集**、**GitHub 官方 staff 推荐的 Marketplace 工具** |
 | `https://hellogithub.com/` | WebFetch 直读 | ✅ **最对口方向 B**。中文一句话说明，日更；当期大量条目就是「AI 技能包」。**但该页的星标数字不可直接引用，见上文** |
 | `https://www.producthunt.com/` | WebFetch 直读 | ✅ 含今日 / 昨日 / 上周 / 上月 Top，**带 upvote 数据** |
-| 今日热榜 `tophub.today` | WebFetch | ✅ 见 `article-to-xhs/references/sources.md` |
-| 抖音总榜 `tophub.today/n/DpQvNABoNE` | WebFetch | ✅ 见 `article-to-douyin` |
-| X 前沿 | WebSearch + `allowed_domains` 聚合站 | ✅ 见 `article-to-xhs/references/sources.md` |
+| 今日热榜 `tophub.today` | WebFetch | ✅ 见 `article-to-social/references/sources.md` |
+| 抖音总榜 `tophub.today/n/DpQvNABoNE` | WebFetch | ✅ 见 `article-to-social/references/sources.md`（抖音选题源一节）|
+| X 前沿 | WebSearch + `allowed_domains` 聚合站 | ✅ 见 `article-to-social/references/sources.md` |
 | Reddit | PowerShell `.rss`（**需 VPN**） | ✅ 需限速 ≥5 秒 |
 
 **方向 B 的选取标准**（不是有热度就算）：
@@ -176,7 +176,7 @@ https://github.com/<owner>/<repo>/blob/main/README.md?plain=1
    这些必须来自官方 trending 页或 GitHub API，云上取不到就留空。
 3. **凡未经官方口径核实的数字，一律写 `[待核实]`**，回电脑后补跑脚本填回。
 4. **交付形态不变**：选题池 HTML 的方向 A / 方向 B 两节照旧，只是数字位留空。
-5. 后面「生成图文」那段见 `article-to-xhs` / `article-to-douyin` 的「多端执行」一节。
+5. 后面「生成图文」那段见 `article-to-social` 的「多端执行」一节。
 
 ---
 
@@ -228,7 +228,7 @@ memory / tool）做的**启发式**标记，**不是官方分类，成品里不�
 ## 输出位置
 
 根目录由环境变量 `XHS_DIR` / `DY_DIR` 决定（本机为 `C:\小红书` / `C:\抖音`；也可在 skill
-目录放 `config.json`，读取规则与 `article-to-xhs/scripts/build_index.py` 头部一致）。
+目录放 `config.json`，读取规则与 `article-to-social/scripts/build_index.py` 头部一致）。
 
 ```text
 <小红书根目录>\选题\GitHub热榜_<YYYYMMDD>.html      # 抓取资料，日榜周榜共用
@@ -249,7 +249,7 @@ memory / tool）做的**启发式**标记，**不是官方分类，成品里不�
 > 方向 B 若两平台页序不同（见 §B），**两个目录的 PNG 文件名与内容都不同**，
 > 不是简单复制。
 
-卡片渲染、汇总 HTML、发布，**复用 `article-to-xhs` / `article-to-douyin`
+卡片渲染、汇总 HTML、发布，**复用 `article-to-social`
 的 `scripts/render.cjs`、`scripts/build_preview.py` 与 `templates/cards.html`**，
 不要在本 skill 里再造一套。
 
@@ -320,9 +320,9 @@ W=<工作目录>
 | 平台 | 上限 | 备注 |
 |---|---|---|
 | **小红书** | **18 张** | 用户明确。本 skill 此前的「4–9 张」是**经验建议值**，不是平台上限，勿再混淆 |
-| **抖音** | **35 张** | 用户明确。覆盖 `article-to-douyin/SKILL.md` 里「2–9 张」的旧说法（该说法是把经验值误当上限） |
+| **抖音** | **35 张** | 用户明确。覆盖 `article-to-social/SKILL.md` 里「2–9 张」的旧说法（该说法是把经验值误当上限） |
 
-单页容量按 `article-to-douyin/SKILL.md` 的实测值：
+单页容量按 `article-to-social/SKILL.md` 的实测值：
 内页 **4 条 item 或 5 条 point**；底部留白目标 15–24%。
 
 ### 取几条：前 5 或前 10（用户 2026-09-29 明确）
@@ -459,7 +459,7 @@ W=<工作目录>
    结尾号召 + 提问。emoji 只在段首，一篇 4–6 个。**光把卡片做好看不够**，
    正文不像小红书，用户会直接判为「没适应小红书风格」。
 
-**核对方法**：跑 `article-to-xhs/scripts/check_copy.py <meta.json>`
+**核对方法**：跑 `article-to-social/scripts/check_copy.py <meta.json>`
 （加 `--platform dy` 只是给输出打上抖音标签，**上限完全相同**）。它会把每个标题的字数、
 正文总字数 / 去空白字数 / 段落数 / emoji 个数打出来，超硬限即退出码 1。
 别再靠眼睛估——本轮两套都是眼睛估漏的。
@@ -468,10 +468,10 @@ W=<工作目录>
 
 | 工具 | 用途 |
 |---|---|
-| `article-to-xhs/scripts/check_copy.py` | 字数自检：**标题 ≤20 / 正文 ≤1000，两平台同口径、均为硬限**（`--platform` 只影响输出里的平台标签）；另报 emoji 数 |
-| `article-to-xhs/scripts/check_banned_words.py` | **发布前违禁词自检**（离线词库，9 类）。`--meta` 检文案、`--html` 检图上文字。退出码 2=有高危 |
-| `article-to-xhs/scripts/banned_words.json` | 违禁词库（《广告法》绝对化用语 / 医疗功效 / 金融诱导 / 迷信 / 违禁品类 / 站外导流 / 敏感营销词 / 伪科学 / 弱极限词）|
-| `article-to-xhs/scripts/build_index.py` | 扫描 `C:\小红书` + `C:\抖音` 生成**成品总索引 HTML**（解决「成品 HTML 不好找」） |
+| `article-to-social/scripts/check_copy.py` | 字数自检：**标题 ≤20 / 正文 ≤1000，两平台同口径、均为硬限**（`--platform` 只影响输出里的平台标签）；另报 emoji 数 |
+| `article-to-social/scripts/check_banned_words.py` | **发布前违禁词自检**（离线词库，9 类）。`--meta` 检文案、`--html` 检图上文字。退出码 2=有高危 |
+| `article-to-social/scripts/banned_words.json` | 违禁词库（《广告法》绝对化用语 / 医疗功效 / 金融诱导 / 迷信 / 违禁品类 / 站外导流 / 敏感营销词 / 伪科学 / 弱极限词）|
+| `article-to-social/scripts/build_index.py` | 扫描 `C:\小红书` + `C:\抖音` 生成**成品总索引 HTML**（解决「成品 HTML 不好找」） |
 
 ### 方向 B：怎么让读者真的拿到它（2026-09-29 用户明确）
 
@@ -574,7 +574,7 @@ W=<工作目录>
    只有 2–3 条时，默认 `flex-start` 会让底部空掉一大半；
    居中是这种页面的正解，不必硬灌内容。
 5. **同一个 cards.html 的改动必须串行提交。**
-   （这条是 `article-to-xhs` 的既有教训，本次继续生效）
+   （这条是 `article-to-social` 的既有教训，本次继续生效）
    对同一文件并行发多个 Edit，只有一处生效，其余被静默覆盖且都返回「成功」。
    **改动多时直接用 Write 整体重写，比分多次 Edit 安全。**
 6. **末页 `.in-foot` 的左右两栏各写短句。**
@@ -625,7 +625,7 @@ W=<工作目录>
 
 | skill | 关系 |
 |---|---|
-| `article-to-xhs` / `article-to-douyin` | 本 skill 产出选题与卡片素材，它们的 ⓪/⑥/⑦ 环节复用 |
+| `article-to-social` | 本 skill 产出选题与卡片素材，它们的 ⓪/⑥/⑦ 环节复用 |
 | `hot__skillhub`（大国热点） | 国内热搜补充源 |
 | `github-check`（市场，未装） | 方向 B 的「是否刷 star / 可否采用」核验 |
 | `github-trending-cn` | **已停用**，口径错误，勿用 |

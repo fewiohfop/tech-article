@@ -1,40 +1,55 @@
 # 图文内容生产 Skill 集（小红书 / 抖音）
 
-三支 WorkBuddy skill 的组合仓库，用于把一篇文章或一个选题做成**小红书 / 抖音图文卡片**。
+两支 WorkBuddy skill 的组合仓库，用于把一篇文章或一个选题做成**小红书 / 抖音图文卡片**。
 
-## 为什么三支放同一个仓库
+## 为什么是两支（2026-10-06 合并说明）
 
-`article-to-xhs` 与 `article-to-douyin` **互相调用对方的脚本**：
+原先是 `article-to-xhs` + `article-to-douyin` + `github-trending-official` 三支。
+合并的实测依据：
 
-| 调用方 | 被调脚本 | 用途 |
-|---|---|---|
-| `article-to-xhs` | `article-to-douyin/scripts/check_density.py` | 校验卡片底部留白 |
-| `article-to-douyin` | `article-to-xhs/scripts/build_index.py` | 刷新内容成品总索引 |
+| 层 | 合并前实际情况 |
+|---|---|
+| 脚本 | 两边的 `render.cjs`、`check_banned_words.py` **逐字节相同**；8 个脚本实际只有 5 个不同的东西 |
+| 代码依赖 | **跨 skill 硬编码路径 0 处** —— 「必须成对安装」只是文档里的一句约束，不是技术事实 |
+| 卡片模板 | 已合并为一份，`data-platform="xhs\|douyin"` 控制 4 处平台差异 |
+| SKILL.md | 两份各 494 非空行，但相似度仅 35.6%（平台差异写进了每一句话） |
 
-**所以两者必须成对安装，不能拆开。** `github-trending-official` 是选题发现线（GitHub 榜单/项目推荐成图文），与本仓库其余部分无脚本级依赖，但共用同一套出图链路，一并放在这里。
+**合并后行为不变**：出图与两支旧 skill **MD5 16/16 逐字节一致**。
+
+| skill | 职责 |
+|---|---|
+| `article-to-social` | 文章/选题 → 小红书 + 抖音图文（卡片 PNG + 文案 + 汇总 HTML） |
+| `github-trending-official` | 选题发现第 ② 线：GitHub 榜单 / 项目推荐成图文 |
+
+两者关系：`github-trending-official` 产出选题 → 交 `article-to-social` 做图文与发布。
 
 ## 目录结构
 
 ```
 .
-├── article-to-xhs/                 # 小红书图文
-│   ├── SKILL.md                    # 工作流定义（入口）
+├── article-to-social/                 # 文章/选题 → 双平台图文（入口）
+│   ├── SKILL.md                        # 工作流定义 ⓪→⑧
+│   ├── config.sample.json              # 路径配置模板（复制为 config.json）
 │   ├── scripts/
-│   │   ├── build_index.py          # 内容成品总索引（扫两平台）
-│   │   ├── env_check.py            # 环境自检（跨平台）
-│   │   ├── render.cjs              # HTML → PNG（Playwright）
-│   │   ├── build_preview.py        # 预览页
-│   │   ├── check_copy.py           # 文案校验（字数 / 话题数）
-│   │   ├── check_banned_words.py   # 违禁词
+│   │   ├── env_check.py                # 环境自检（换设备第一条命令）
+│   │   ├── render.cjs                  # HTML → PNG（Chromium 定位跨三平台）
+│   │   ├── build_index.py              # 内容成品总索引（扫两平台）
+│   │   ├── build_preview.py            # 单文件汇总 HTML
+│   │   ├── check_copy.py               # 文案校验（字数 / emoji / 话题数）
+│   │   ├── check_density.py            # 卡片填充度（需 Pillow）
+│   │   ├── check_banned_words.py       # 违禁词
 │   │   └── banned_words.json
-│   ├── templates/cards.html        # 卡片模板
-│   ├── references/                 # 事实核验 / 结构重组 / 来源 等规范
-│   └── config.sample.json          # 路径配置模板（复制为 config.json）
-├── article-to-douyin/              # 抖音图文
-│   ├── SKILL.md
-│   ├── scripts/  （含 check_density.py）
-│   └── templates/cards.html
-└── github-trending-official/       # 选题发现（GitHub 榜单 / 项目推荐）
+│   ├── templates/
+│   │   └── cards.html                  # ★ 一份模板出两平台
+│   └── references/
+│       ├── platform-diff.md            # ★ 开工前必读：两平台全部差异
+│       ├── fact-check.md               # 事实核验 / 来源署名 / AIGC 标注
+│       ├── rewrite-structure.md        # 结构重组 / 抖音前两张约束
+│       ├── sources.md                  # 选题源 / 可达性 / 话题玩法
+│       ├── bgm.md                      # 抖音配乐
+│       ├── why-no-autopublish.md       # 为什么不自动发布
+│       └── publish-automation-quark.md # 抖音半自动填充（停在发布页）
+└── github-trending-official/           # 选题发现（GitHub 榜单 / 项目推荐）
     ├── SKILL.md
     ├── scripts/  （trending 抓取 / 榜单拼版）
     └── references/
@@ -44,30 +59,32 @@
 
 | 组件 | 要求 | 备注 |
 |---|---|---|
-| Python | 3.9+ | 唯一第三方依赖是 **Pillow**（读 PNG 算留白） |
+| Python | 3.9+ | **唯一第三方依赖是 Pillow**（`check_density.py` 读 PNG 算留白），其余全标准库 |
 | Node.js | 18+ | 用于 `render.cjs` 出图 |
 | playwright-core | 任意近期版本 | `npm i playwright-core` |
 | Chromium | 约 428 MB | `npx playwright install chromium` |
 | 中文字体 | 必需 | 缺了中文会渲染成方块；Debian 系 `apt install fonts-noto-cjk` |
-| Git | 出图**不需要** | 只在 `git clone` / 推送时用。Windows 上若未安装 Git，可复用 WorkBuddy 自带的便携版：`%USERPROFILE%\.workbuddy\binaries\PortableGit\versions\<版本>\cmd\git.exe`（`<版本>` 见同目录下的 `current` 文件） |
+| Git | 出图**不需要** | 只在 `git clone` / 推送时用。Windows 上若未装 Git，可复用 WorkBuddy 自带的便携版：`%USERPROFILE%\.workbuddy\binaries\PortableGit\versions\<版本>\cmd\git.exe`（版本号见同目录的 `current` 文件） |
 
 一条命令查全：
 
 ```bash
-python article-to-xhs/scripts/env_check.py --net
+python article-to-social/scripts/env_check.py --net
 ```
 
-它会报出 Python / Node / playwright-core / Chromium / Pillow / 中文字体 / 成品目录 / 网络的实际状态与缺失项，并给出补装命令。加 `--json` 可输出机器可读结果。
+它会报出 Python / Node / playwright-core / Chromium / Pillow / 中文字体 / 成品目录 / 网络的实际状态与缺失项，并给出补装命令。加 `--json` 输出机器可读结果。
 
 ## 安装
 
 **方式一（推荐）**：在 WorkBuddy 里执行 `/skills import <本仓库地址>`。
 
-**方式二**：把仓库里三个目录整体复制到本机 skills 目录（Windows 为 `%USERPROFILE%\.workbuddy\skills\`）。
+**方式二**：把仓库里两个目录整体复制到本机 skills 目录（Windows 为 `%USERPROFILE%\.workbuddy\skills\`）。
+
+> 合并后**不再有「必须成对安装」的限制** —— 只有一支图文 skill。
 
 ## 配置输出目录
 
-三支脚本默认写到 `C:\小红书` / `C:\抖音`。换设备时**不用改代码**，三种方式任选：
+脚本默认写到 `C:\小红书` / `C:\抖音`（Windows）。换设备时**不用改代码**，三种方式任选：
 
 ```bash
 # 1) 环境变量
@@ -75,11 +92,10 @@ export XHS_DIR=/path/to/xhs
 export DY_DIR=/path/to/douyin
 
 # 2) skill 目录下建 config.json（照 config.sample.json 改）
-#    注意：只有 article-to-xhs 目录下的 config.json 会被读取
-#    （扫描与索引逻辑都在 xhs 侧，两 skill 共用这一份配置）
+#    位置：article-to-social/config.json
 
 # 3) 命令行参数（仅 build_index.py）
-python article-to-xhs/scripts/build_index.py --out /path/to/index.html
+python article-to-social/scripts/build_index.py --out /path/to/index.html
 ```
 
 优先级：**命令行参数 > 环境变量 > `config.json` > 内置默认**。
@@ -88,24 +104,49 @@ python article-to-xhs/scripts/build_index.py --out /path/to/index.html
 
 ## 出图
 
+一份模板出两个平台，`build_cards.py` 按 `--platform` 注入 `<html data-platform="...">`，
+平台差异（页码格式 / 封面滑动提示 / 字号间距档位 / 末页互动引导）由 CSS 自动处理。
+
 ```bash
 NODE_PATH=<含 playwright-core 的 node_modules> \
-  node article-to-xhs/scripts/render.cjs <cards.html> <输出目录> <张数>
+  node article-to-social/scripts/render.cjs <cards.html> <输出目录> <张数>
 ```
 
 Chromium 会自动扫描 Windows / macOS / Linux 的常见安装位置；也可用 `PLAYWRIGHT_BROWSERS_PATH` 显式指定根目录。找不到时会列出所有扫描过的路径。
+
+### ⚠️ 已知缺口：出图工具链未进仓库
+
+`build_cards.py` / `make.py` / `render2.cjs` / `deliver.py` 目前只在**本机**
+`C:\srtwb\cards\`，**没有提交进本仓库**。因此从云端 `import` 后：
+
+| 环节 | 云端能否执行 |
+|---|---|
+| ⓪ 选题发现 | ✅ |
+| ①–⑤ 取文 / 核验 / 重组 / 改写 | ✅ |
+| ⑥ **出图 PNG** | ❌ 缺 `make.py` |
+| ⑦ 汇总 HTML | ✅ |
+| ⑧ 刷新索引 | ✅ |
+
+**绕开方式**：云端跑 ⓪–⑤ 与 ⑦–⑧，把卡片清单落成结构化文本，回本机补渲染 ⑥。
+
+> 直接调用 `scripts/render.cjs`（仓库内）绕过 `make.py` 也能出图，但就没有
+> autogap 收敛、DOM 密度测量、违禁词预检这三步。
 
 ## ⚠️ 本仓库工作树就是本机 skills 目录
 
 如果你在本机直接使用本仓库（而非 clone 到别处）：
 
-- **不要执行 `git clean -xdf`** —— 其余未跟踪的 skill 会被一并清掉；
-- `.gitignore` 用的是白名单写法（先排除顶层一切，再放行上面三个目录），
+- **不要执行 `git clean -xdf`** —— 其余未跟踪的 skill 会被一并清掉（**这是本仓库唯一危险的命令**）；
+- `.gitignore` 用的是白名单写法（先排除顶层一切，再放行上面两个目录），
   在本机新增的其他 skill **不会被误提交**；
 - 新增/切换设备时，改用 `git clone` 到独立目录更省心。
 
 ## 出处与时点
 
-本仓库由 2026-10-05 的一次跨设备改造产生：清掉了脚本里写死的本机绝对路径，
-补齐了跨平台 Chromium 定位与中文字体 fallback，并加入环境自检。
-改造前后在同一份输入上的出图结果 **逐字节相同**。
+- **2026-10-05**：跨设备改造 —— 清掉脚本里写死的本机绝对路径，补齐跨平台 Chromium 定位
+  与中文字体 fallback，加入环境自检。改造前后出图**逐字节相同**。
+- **2026-10-06**：`article-to-xhs` + `article-to-douyin` 合并为 `article-to-social` ——
+  脚本去重（8 → 5 个）、卡片模板合为一份（`data-platform` 控制差异）、
+  平台差异集中到 `references/platform-diff.md`。合并后出图与两支旧 skill
+  **MD5 16/16 逐字节一致**。同日补上 `make.py` 报告路径的静默失败修复
+  （相对路径会让密度报告读到上一轮的旧文件）。

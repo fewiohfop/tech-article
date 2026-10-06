@@ -223,7 +223,7 @@ def build(work, date, pull_a, pull_f):
 <code>api.github.com/repos/&lt;owner&gt;/&lt;repo&gt;</code>（星标 / pushed_at）·
 <code>hellogithub.com</code> · <code>github.com/explore</code> · <code>producthunt.com</code>。<br>
 口径说明：<b>增量 ≠ 总星</b>；增量取自官方 trending 页，会随页面缓存变动。<br>
-本页为「抓取的选题资料」，不是成品图文。成品走 <code>article-to-xhs</code> / <code>article-to-douyin</code> 的 ①–⑧。
+本页为「抓取的选题资料」，不是成品图文。成品走 <code>article-to-social</code></code> 的 ①–⑧。
 </footer>
 </div>
 </body>

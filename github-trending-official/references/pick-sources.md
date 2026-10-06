@@ -75,8 +75,8 @@ $s  = '<本 skill 目录>\scripts\github_trending_official.py'
 ### ⑤–⑧ 复用既有文档
 
 - tophub 节点清单、X 聚合站域名、Reddit `.rss` 用法：
-  直接看 `article-to-xhs/references/sources.md`，**不要重复调研**
-- 抖音站内榜：`article-to-douyin/references/sources.md`
+  直接看 `article-to-social/references/sources.md`，**不要重复调研**
+- 抖音站内榜：`article-to-social/references/sources.md`
 
 ---
 
@@ -109,7 +109,7 @@ Product Hunt 类非开源产品用产品名做近似匹配，**匹配不确定�
 - 「能做什么」→ **回 README 看**，不要用第三方一句话说明当能力清单
 - 「实例认证」→ 优先用仓库里的 Demo / 截图 / benchmark；用第三方案例要标来源
 - 星数是否虚高 → 送 `github-check`
-- 涉及具体数字（性能、准确率）→ 按 `article-to-xhs/references/fact-check.md`
+- 涉及具体数字（性能、准确率）→ 按 `article-to-social/references/fact-check.md`
   的三级标注处理
 
 **找不到实证的项目，宁可不做，也不要靠推测把它写「好用」。**
