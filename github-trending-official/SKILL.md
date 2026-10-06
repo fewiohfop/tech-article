@@ -299,7 +299,9 @@ W=<工作目录>
 "$PY" "$S/fetch_repo_fields.py" --repos-file <repo列表.txt> --out "$W/_gh_fields.json"
 
 # 3) 拼版（文案写在 <工作目录>/_pool_desc.json，形状见 references/pool-data.sample.json）
-"$PY" "$S/build_pool.py" --work "$W" --out "<小红书成品根目录>/选题" --out "<抖音成品根目录>/选题" --date YYYY-MM-DD
+# ⚠️ --out 只认最后一个，输出两个平台必须跑两次（2026-10-06 实测）
+"$PY" "$S/build_pool.py" --work "$W" --out "<小红书成品根目录>/选题" --date YYYY-MM-DD
+"$PY" "$S/build_pool.py" --work "$W" --out "<抖音成品根目录>/选题" --date YYYY-MM-DD
 ```
 
 - **`build_pool.py` 只负责拼版**，不猜数据。它读 `_gh_daily.json` / `_gh_weekly.json` /
