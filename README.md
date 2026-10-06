@@ -114,7 +114,7 @@ NODE_PATH=<含 playwright-core 的 node_modules> \
 
 Chromium 会自动扫描 Windows / macOS / Linux 的常见安装位置；也可用 `PLAYWRIGHT_BROWSERS_PATH` 显式指定根目录。找不到时会列出所有扫描过的路径。
 
-### 📌 出图工具链不在本仓库（只影响云端，本机一切正常）
+### 📌 出图工具链不在本仓库 —— 但云端已验证能出图，不动它
 
 `build_cards.py` / `make.py` / `render2.cjs` / `deliver.py` / `make_all.py` 只在本机
 `C:\srtwb\cards\`，**没有提交进本仓库**。已核实仓库首版（`85e828d`，44 个文件）里也没有它们
@@ -123,17 +123,28 @@ Chromium 会自动扫描 Windows / macOS / Linux 的常见安装位置；也可�
 | 环境 | 状态 |
 |---|---|
 | **本机** | ✅ 出图流程完整可用，`make.py` 照常跑 |
-| **云端** | ⓪–⑤、⑦–⑧ 可跑；**⑥ 出图跑不了**（`make.py` 找不到） |
+| **云端** | ✅ **2026-10-06 用户实测已在云端成功出图**，环境（Chromium / 中文字体 / Pillow）齐备 |
 
-**云端绕开方式**：⓪–⑤ 与汇总页在云端做，PNG 回本机补渲染；
-或直接调仓库内的 `scripts/render.cjs`，只是没有 autogap 收敛、DOM 密度测量、违禁词预检。
+**决定：不收进仓库。** 理由：① 云端已能出图，收进去没有实际收益；
+② 5 个脚本有 21 处本机硬编码，收进仓库得先做一轮跨设备改造；
+③ 合并前后出图产物 MD5 16/16 一致，改它等于引入无收益的风险。
 
-**要云端出图得一次做完三件**（别只做第一件，那样只是把「缺工具」变成「工具在但跑不起来」）：
+哪天真需要同步工具链，再一次性做「去硬编码 + 云端对齐」两件事。
 
-1. 把 5 个核心脚本去硬编码后收进仓库
-   （`C:\srtwb\cards\` 里另外 14 个 `patch*.py` / `fix*.py` 是历史一次性补丁，不收）；
-2. 云端装 Chromium（约 428 MB）；
-3. 验云端中文字体 + `pip install Pillow`。
+## 日常推送：双击 `push-to-github.bat`
+
+改完本机 skill 后双击仓库根目录的 `push-to-github.bat` 即可（自动定位 git → 设置身份
+→ 提交 → 推送）。
+
+> 🔧 **「Select a credential helper」弹窗已解决（2026-10-06）**
+> 便携版 Git 的 system 配置里写着 `credential.helper = helper-selector`，
+> 这个程序**每次都会弹选择框**（勾了「Always use this from now on」也不管用，
+> 因为它仍排在优先级第一位）。修法是在仓库级用**空值重置上层继承**，只留 `manager`：
+> ```bash
+> git config --local --replace-all credential.helper ""
+> git config --local --add credential.helper "manager"
+> ```
+> 脚本已内置这两行。凭据已存在时推送**完全静默**，不会开浏览器。
 
 ## ⚠️ 本仓库工作树就是本机 skills 目录
 
@@ -152,4 +163,5 @@ Chromium 会自动扫描 Windows / macOS / Linux 的常见安装位置；也可�
   脚本去重（8 → 5 个）、卡片模板合为一份（`data-platform` 控制差异）、
   平台差异集中到 `references/platform-diff.md`。合并后出图与两支旧 skill
   **MD5 16/16 逐字节一致**。同日补上 `make.py` 报告路径的静默失败修复
-  （相对路径会让密度报告读到上一轮的旧文件）。
+  （相对路径会让密度报告读到上一轮的旧文件），并修掉推送时反复弹出的
+  credential helper 选择框。
