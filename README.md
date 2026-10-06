@@ -114,23 +114,26 @@ NODE_PATH=<含 playwright-core 的 node_modules> \
 
 Chromium 会自动扫描 Windows / macOS / Linux 的常见安装位置；也可用 `PLAYWRIGHT_BROWSERS_PATH` 显式指定根目录。找不到时会列出所有扫描过的路径。
 
-### ⚠️ 已知缺口：出图工具链未进仓库
+### 📌 出图工具链不在本仓库（只影响云端，本机一切正常）
 
-`build_cards.py` / `make.py` / `render2.cjs` / `deliver.py` 目前只在**本机**
-`C:\srtwb\cards\`，**没有提交进本仓库**。因此从云端 `import` 后：
+`build_cards.py` / `make.py` / `render2.cjs` / `deliver.py` / `make_all.py` 只在本机
+`C:\srtwb\cards\`，**没有提交进本仓库**。已核实仓库首版（`85e828d`，44 个文件）里也没有它们
+—— **不是某次改动造成的回归**。
 
-| 环节 | 云端能否执行 |
+| 环境 | 状态 |
 |---|---|
-| ⓪ 选题发现 | ✅ |
-| ①–⑤ 取文 / 核验 / 重组 / 改写 | ✅ |
-| ⑥ **出图 PNG** | ❌ 缺 `make.py` |
-| ⑦ 汇总 HTML | ✅ |
-| ⑧ 刷新索引 | ✅ |
+| **本机** | ✅ 出图流程完整可用，`make.py` 照常跑 |
+| **云端** | ⓪–⑤、⑦–⑧ 可跑；**⑥ 出图跑不了**（`make.py` 找不到） |
 
-**绕开方式**：云端跑 ⓪–⑤ 与 ⑦–⑧，把卡片清单落成结构化文本，回本机补渲染 ⑥。
+**云端绕开方式**：⓪–⑤ 与汇总页在云端做，PNG 回本机补渲染；
+或直接调仓库内的 `scripts/render.cjs`，只是没有 autogap 收敛、DOM 密度测量、违禁词预检。
 
-> 直接调用 `scripts/render.cjs`（仓库内）绕过 `make.py` 也能出图，但就没有
-> autogap 收敛、DOM 密度测量、违禁词预检这三步。
+**要云端出图得一次做完三件**（别只做第一件，那样只是把「缺工具」变成「工具在但跑不起来」）：
+
+1. 把 5 个核心脚本去硬编码后收进仓库
+   （`C:\srtwb\cards\` 里另外 14 个 `patch*.py` / `fix*.py` 是历史一次性补丁，不收）；
+2. 云端装 Chromium（约 428 MB）；
+3. 验云端中文字体 + `pip install Pillow`。
 
 ## ⚠️ 本仓库工作树就是本机 skills 目录
 

@@ -708,11 +708,18 @@ article-to-social/
 | `why-no-autopublish.md` | 为什么发布不自动化 + 现成方案盘点 |
 | `publish-automation-quark.md` | 抖音半自动填充的完整实现（夸克本体，停在发布页） |
 
-> ⚠️ **已知缺口：出图工具链不在本仓库。** `build_cards.py` / `make.py` / `render2.cjs` /
-> `deliver.py` 目前只存在于本机 `C:\srtwb\cards\`，**没有进 Git 仓库**。
-> 后果：云端 `import` 本 skill 后，⓪–⑤ 与 ⑦–⑧ 可跑，**⑥ 出图跑不了**
-> （`make.py` 找不到）。选前 5 步与汇总页在云端做、PNG 回本机补渲染即可绕开。
-> 要补齐需把那几个脚本收进本仓库 —— 涉及工作目录约定，待定。
+> 📌 **关于出图工具链：只影响云端，本机一切正常。**
+> `build_cards.py` / `make.py` / `render2.cjs` / `deliver.py` / `make_all.py` 只存在于本机
+> `C:\srtwb\cards\`，**不进 Git 仓库**（已核实：仓库首版 `85e828d` 的 44 个文件里也没有它们，
+> **不是某次改动造成的**）。
+> - **本机**：出图流程完整可用，`make.py` 照常跑。
+> - **云端**：`import` 本 skill 后 ⓪–⑤、⑦–⑧ 可跑，**⑥ 出图跑不了**（`make.py` 找不到）。
+>   绕开：⓪–⑤ 与汇总页在云端做，PNG 回本机补渲染；或直接调 `scripts/render.cjs`，
+>   只是没有 autogap 收敛、DOM 密度测量、违禁词预检。
+> - **要云端出图得一次做完三件**：① 把 5 个核心脚本去硬编码后收进仓库
+>   （`C:\srtwb\cards\` 里另外 14 个 `patch*.py` / `fix*.py` 是历史一次性补丁，别收）；
+>   ② 云端装 Chromium；③ 验云端中文字体 + `pip install Pillow`。
+>   **只做 ① 等于把「缺工具」变成「工具在但跑不起来」。**
 
 ---
 
