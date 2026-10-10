@@ -105,8 +105,14 @@ def render_cover(p, platform, html_theme):
     # 2026-10-07 新增 —— 原来封面既不渲染 blocks 也没有紧凑模式，
     # 榜单放不进去，且标题被挤到 WRAP。
     compact = ' compact' if p.get("compact") else ''
-    parts.append('<div class="card cover%s"%s data-export="%s">'
-                 % (compact, theme_attr(p, html_theme), p["export"]))
+    # 按大字行数打 linesN 标记（2026-10-10）：模板据此给基准字号与行距，
+    # render2.cjs 据此做「实测字宽 → 收缩」，保证每行都放得下、不折行。
+    # ⚠️ 榜单类封面（compact）不加，仍走 .cover.compact 自己的小字号档。
+    nbig = sum(1 for k in ("title", "title2", "title3") if p.get(k))
+    lines_cls = '' if (compact or not nbig) else ' lines%d' % nbig
+    fit_attr = (' data-fit="%s"' % p["cover_fit"]) if (lines_cls and p.get("cover_fit")) else ''
+    parts.append('<div class="card cover%s%s"%s data-export="%s"%s>'
+                 % (compact, lines_cls, theme_attr(p, html_theme), p["export"], fit_attr))
     parts.append('  <div class="cv-grid"></div>')
     parts.append('  <div class="cv-glow"></div>')
     parts.append('')
@@ -146,7 +152,16 @@ def render_cover(p, platform, html_theme):
                      % (style, _hl(p["title"], p.get("title_hl"))))
     if p.get("title2"):
         fs2 = p.get("title2_fs")
-        style2 = ' style="font-size:%dpx;letter-spacing:-1px"' % fs2 if fs2 else ""
+        st2 = []
+        if fs2:
+            st2.append("font-size:%dpx" % fs2)
+            st2.append("letter-spacing:-1px")
+        if p.get("title2_plain"):
+            # 第二行大字不要强调色（2026-10-10 新增）。用户口径「GPT6 这个字不用紫色
+            # 就可以了」——整行改用主题白（--cv-title），不做视觉焦点。
+            # ⚠️ 此时行内 _hl 的高亮也会是同一个白，整行同色属于预期。
+            st2.append("color:var(--cv-title)")
+        style2 = ' style="%s"' % ";".join(st2) if st2 else ""
         parts.append('    <div class="cv-title2"%s>%s</div>'
                      % (style2, _hl(p["title2"], p.get("title2_hl"))))
     if p.get("title3"):

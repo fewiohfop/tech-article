@@ -68,7 +68,7 @@
     --chip-pad:14px 30px;
     --glow-size:760px;          --glow-blur:150px;  --glow-right:-260px; --glow-top:-240px;
     --head-mb:60px;             --kicker-mb:26px;  --item-t-mb:12px;
-    --line-h:9px;               --line-w:110px;  --line-m:52px 0 42px;
+    --line-h:9px;               --line-w:110px;  --line-m:78px 0 42px;
     --rule-h:7px;               --rule-mb:46px;
     --items-gap:46px;           --item-bd-w:6px;  --item-pad:30px;
     --stat-gap:52px;            --stat-pt:52px;
@@ -87,6 +87,14 @@
     /* 封面榜单（compact）*/
     --fs-cv-title-c:66px;  --fs-cv-title2-c:58px;  --fs-cv-desc-c:27px;
     --cv-blocks-mt:22px;--rl-gap-compact:6px;--ls-cv-title-c:3px;--cv-title2-mt:8px;
+    /* 封面三行大字的行间距（2026-10-10 新增）。原来三行只靠 line-height 1.04 分隔，
+       视觉上挤成一坨；用户要求「间隔拉宽一点」，并把下面的分隔线 + 小字整体下移。
+       ⚠️ 只作用于非 compact 封面；榜单类封面（compact）由 .cover.compact 覆盖。 */
+    --cv-tgap:20px;
+    /* 封面大字「按行数定基准 + 浏览器实测收缩」（2026-10-10 固定排版）。
+       基准字号由 .linesN 取用；实际字号由 render2.cjs 实测字宽后写回，
+       保证「每行都放得下」又不折行。改基准只改这三个数即可。 */
+    --cvt-1:132px; --cvt-2:118px; --cvt-3:110px;
     --brand-fs:25px;
   }
   [data-platform="douyin"]{
@@ -104,7 +112,7 @@
     --chip-pad:14px 32px;
     --glow-size:800px;   --glow-blur:155px;   --glow-right:-270px; --glow-top:-250px;
     --head-mb:56px;      --kicker-mb:28px;  --item-t-mb:14px;
-    --line-h:10px; --line-w:118px; --line-m:50px 0 40px;
+    --line-h:10px; --line-w:118px; --line-m:74px 0 40px;
     --rule-h:8px;        --rule-mb:48px;
     --items-gap:52px;    --item-bd-w:7px; --item-pad:32px;
     --stat-gap:54px;     --stat-pt:46px;
@@ -123,6 +131,8 @@
     /* 封面榜单（compact）—— 抖音字更大，但 10 条要塞进一屏，仍比小红书紧 */
     --fs-cv-title-c:70px;  --fs-cv-title2-c:62px;  --fs-cv-desc-c:28px;
     --cv-blocks-mt:20px;--rl-gap-compact:5px;--ls-cv-title-c:4px;--cv-title2-mt:9px;
+    --cv-tgap:22px;   /* 抖音：快滑要更松，比小红书再宽一档 */
+    --cvt-1:142px; --cvt-2:128px; --cvt-3:118px;   /* 封面大字基准：比小红书大一档 */
     --in-sub-mb-dy:18px;
     --brand-fs:26px;
   }
@@ -292,6 +302,24 @@
   .cv-title2{font-size:var(--fs-cv-title);font-weight:700;line-height:var(--lh-cv-title);letter-spacing:var(--ls-cv-title);color:var(--cv-title2)}
   /* 第三行大字（2026-10-09 新增）：白/紫/白 交替节奏。仅个别封面用到 title3 字段 */
   .cv-title3{font-size:var(--fs-cv-title);font-weight:700;line-height:var(--lh-cv-title);letter-spacing:var(--ls-cv-title);color:var(--cv-title)}
+  /* 三行大字之间的行间距（2026-10-10 新增）。间距一拉开，版面自然变高，
+     配合 .cover 的 space-between，把下方分隔线 + desc 小字整体压下去，
+     用掉原来「小字下面」那段空着的地方。
+     ⚠️ compact 榜单封面的 .cv-title2 有自己的 margin-top（--cv-title2-mt），
+        选择器权重更高，不受这里影响。 */
+  .cv-title2,.cv-title3{margin-top:var(--cv-tgap)}
+  /* 封面大字「按行数定基准」（2026-10-10）。1/2/3 行各给一个基准字号，
+     再由 render2.cjs 实测字宽收缩（带上 .linesN 的封面才走这套）。
+     ⚠️ 行距**不在这里写死**：字号一旦收缩，行距必须跟着等比收，否则小字配大间距会散。
+        统一由 render2.cjs 按最终字号算（size×0.22），所以这里只定字号。
+     ⚠️ 全程手写字号的封面（老卡）不走这套：字号不受影响、行距也保持全局 20/22px
+        → 与历史成品逐字节一致（已回归验证）。
+     ⚠️ 榜单类封面（.cover.compact）不加 .linesN，仍由 .cover.compact 规则接管。 */
+  .cover.lines1{--fs-cv-title:var(--cvt-1)}
+  .cover.lines2{--fs-cv-title:var(--cvt-2)}
+  .cover.lines3{--fs-cv-title:var(--cvt-3)}
+  /* 行数由 build_cards.py 落在 class 上；字号若被人工写死（inline font-size），
+     render2.cjs 会跳过该行不收缩 —— 人工优先于自动。 */
   /* 行内关键词换色（2026-10-09 新增）：一行里挑 1 个词换色，制造视觉焦点。
      白色行（title/title3）的高亮取主题强调色；已经是强调色的 title2 行反而用白色。 */
   .cv-hl{color:var(--cv-title2)}

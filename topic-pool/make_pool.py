@@ -280,6 +280,15 @@ _GENERIC = {
     'gemini', 'gpt', 'chatgpt', 'claude', 'deepseek', 'qwen', 'kimi', 'grok', 'llama',
     'manus', 'midjourney', 'cursor', 'copilot', 'sora', 'runway', 'waymo', 'openrouter',
     'stepfun', 'doubao', '豆包', '文心', '通义', '混元', '智谱', '阶跃',
+    # ⚠️ 2026-10-10 实测踩坑：`ents()` 会把「iPhone 18 Pro」拆成 iphone / pro 两个实体，
+    #    于是「只共现一个产品线词不判同」的护栏被绕过 —— 三条**不同**的 iPhone 18 Pro 新闻
+    #    （砍单传闻 / 上手体验 / 美版有问题）被并成一条「3 源命中」。产品线词与
+    #    产品修饰词必须整体当通用词剔除。同理补上英文通用词，防 HN/GitHub 条目靠
+    #    open / source / reverse 这种词被错合。
+    'iphone', 'ipad', 'macbook', 'airpods', 'imac', 'mac',
+    'pro', 'max', 'plus', 'ultra', 'mini', 'air', 'lite', 'promax',
+    'source', 'open', 'anything', 'engineer', 'reverse', 'people',
+    'core', 'projects', 'using', 'with', 'model', 'models',
 }
 
 
@@ -625,6 +634,86 @@ HOOK_DROP = ['福利', '优惠', '专享', '领取', '抽奖', '折扣', '秒杀
 MUST_CAP = 20       # 必抓更新上限（**只对 AI 类**；用户：太多了，保留 20 条就好）
 SINGLE_CAP = 30     # 单源候选上限（用户 2026-10-09：限 30 条以内）
 
+# ============ 本轮（2026-10-10）逐日参数：节点时效自检 + 与已发成品查重 ============
+# ⚠️ 这一块**每天都要按当轮实测改**，写在代码里是为了出 HTML 时能自动带出来，
+#    避免「口头说查过了、页面上没写」。
+# ① 时效自检（用户规则 5）：与昨日同节点条目**完全重合** = 停更 → 本轮不参与合并。
+STALE_NODES = [
+    ('威锋网', '本日 30 条与 10-09 完全重合（30/30）', '停更'),
+    ('AI产品榜', '本日 10 条与 10-09 完全重合（10/10）', '停更'),
+    ('极客公园', '本日 30 条与 10-09 重合 27 条', '近停更 · 且用户已指明不再使用该节点'),
+]
+# ② 与已发成品查重（用户规则 7）：只列**成品目录**（YYYYMMDD_主题），不做二次创作。
+DUP_DONE = [
+    ('OpenAI dots / Dots 智能体', ['20261001_OpenAIDots上线'], ['dots']),
+    ('Claude Haiku 5.5', ['20261008_ClaudeHaiku55'], ['haiku 5.5', 'haiku5.5']),
+    ('Claude Sonnet 5.5', ['20260929_ClaudeSonnet55发布'], ['sonnet 5.5']),
+    ('Gemini 4 Argon / Pro', ['20261001_Gemini4Argon发布', '20260928_Gemini4Pro突然曝光'],
+     ['gemini 4 argon', 'gemini 4 pro']),
+    ('GPT-6 本体与智能界面', ['20260928_GPT6Astra首发评测', '20260930_GPT61Sol上线',
+                       '20261008_GPT6智能界面'],
+     ['gpt-6 sol', 'gpt6 sol', 'gpt-6 luna', 'gpt 6 luna', 'iui', '智能用户界面']),
+    ('OpenAI「28 天计划」', ['20261005_OpenAI28天承诺'], ['28 天计划', '28天计划']),
+    ('谷歌办公 Agent（Gemini Agent）', ['20261009_谷歌办公Agent'],
+     ['gemini agent', 'gemini智能体', '办公智能体', '办公agent']),
+    ('英伟达笔记本 / RTX Spark Surface', ['20261009_英伟达笔记本'], ['rtx spark']),
+    ('苹果 AI 硬件一进一退', ['20261005_苹果AI硬件一进一退'],
+     ['暂停开发一款配备摄像头的 ai 可穿戴', '配备摄像头的 ai 可穿戴']),
+    ('DeepSeek 兼容 Claude 插件', ['20261005_DeepSeek兼容Claude插件'],
+     ['deepseek 兼容 claude', 'claude 插件']),
+    ('华为麒麟 9050', ['20261005_华为麒麟9050逻辑折叠'], ['麒麟 9050', '麒麟9050']),
+    ('OpenAI 文字水印', ['20261006_OpenAI文字水印'], ['文字水印']),
+]
+
+RUBRIC_NOTE = '与已发成品重合（不做）'
+
+# ④ 来源独立性（2026-10-10 起）：**聚合站与转载不构成第二个来源**。
+#    用户规则「不把同一站点的两个节点当两个源」的同一道理 —— 同一篇稿件换站再发，
+#    仍然是**一个新闻源**，把它算成「2 源命中」就是伪造交叉核验。
+NON_INDEPENDENT = {'Readhub'}   # 纯聚合站，自身不产稿，只收录别家稿件
+REPOST = [
+    (frozenset(('36氪AI频道', '爱范儿')),
+     '36氪该条页面署名「爱范儿 · 2026-10-10 07:19」，为转载'),
+    (frozenset(('36氪24h', '量子位')),
+     '36氪该条页面署名「量子位 · 2026-10-09 15:27」，为转载'),
+    (frozenset(('36氪AI频道', 'Readhub')),
+     'Readhub 为聚合站，该 topic 下同时列出 51CTO／36Kr／投资界同一篇稿件'),
+]
+
+
+def indep_count(e):
+    """独立来源数：聚合站不计；命中转载对的整对只按 1 个算。"""
+    names = list(dict.fromkeys(e.get('src_names') or []))
+    n = len([s for s in names if s not in NON_INDEPENDENT])
+    note = ''
+    for grp, why in REPOST:
+        if grp <= set(names):
+            n -= (len(grp) - 1)
+            note = note or why
+    if note == '' and len(names) and all(s in NON_INDEPENDENT for s in names):
+        note = '全部来源均为聚合站'
+    return max(n, 0), note
+
+
+# ③ 本轮网络实测时点与检索侧结论（逐日更新）
+PROBE_TIME = '2026-10-10 09:37'
+WEBSEARCH_NOTE = ('共发起 3 次限定域名检索，仅 <code>officechai.com</code> 返回 2 条'
+                  '（均为 Claude Haiku 5.5 的 Artificial Analysis 测分与定价，'
+                  '<b>属已发主题，故不计入本池</b>）；'
+                  '<code>dataconomy.com</code> / <code>the-decoder.com</code> / '
+                  '<code>kocpc.com.tw</code> / <code>tldrocket.com</code> 等'
+                  '在本轮时间窗内无返回')
+
+
+def dup_of(e):
+    """条目是否与已发成品重合；返回 (主题, 成品目录) 或 None。"""
+    t = norm(e['title'])
+    for topic, dirs, keys in DUP_DONE:
+        if any(norm(k) in t for k in keys):
+            return (topic, dirs[0])
+    return None
+
+
 
 def balanced_pick(items, cap, per_fame=0):
     """按大类**软均衡**地取前 cap 条，返回时保持原排序。
@@ -733,13 +822,15 @@ def build(events, date):
     # ⚠️ 不能按全局名次取前 6 —— 那会全被 AI 占（AI 源产量本就大）。
     picks = []
     for cat in ('AI', '科技'):
-        in_cat = [e for e in multi if e['cat'] == cat]
+        # 与已发成品重合的不进推荐（用户规则 7）
+        in_cat = [e for e in multi if e['cat'] == cat and not dup_of(e)]
         picks += in_cat[:3]
         if len(in_cat) < 3:
             # 补位也只补**有核实内容（DETAIL）**的条目 —— 没有核实的渲染不出「匹配度」，
             # 放进推荐区会出现标题写 3 条、实际只显示 2 条的错位。
             # ⚠️ 必抓只含 AI 类（2026-10-09 用户定）→ 科技类实际永不从这里补位，多源不足就少列。
-            picks += [e for e in must_only if e['cat'] == cat and _detail(e)][:3 - len(in_cat)]
+            picks += [e for e in must_only
+                      if e['cat'] == cat and _detail(e) and not dup_of(e)][:3 - len(in_cat)]
     picks.sort(key=key)
     return multi, must_only, hooks, keep, picks, len(single) - len(keep)
 
@@ -854,30 +945,78 @@ DETAIL = {
                '时间窗口本身就是话题。「连竞争对手的模型都要调用」是天然的反差钩子，'
                '读者不用懂技术也能看懂矛盾。',
     },
-    '陶哲轩': {
-        'angle': '钩子是<b>「三小时算力碾碎学者一生研究」这个数字</b>，不是「数学家抵制 AI」。'
-                 '陶哲轩那句「一个问题一旦被宣称解决，就再也回不到未解决的状态」'
-                 '比「宣战」更有传播力——<b>讲的是不可逆的污染，不是立场之争</b>。',
-        'facts': '人类数学协会（AHM，Association for Human Mathematicians）联合声明，'
-                 '陶哲轩领衔，<b>全面抵制 OpenAI</b> · 此前陶哲轩已联合 <b>25 位菲尔兹奖得主</b>发声 · '
-                 'OpenAI 用内部模型测试约 <b>8000 道</b>开放数学题，命中率约 5%，'
-                 '<b>放出 700 多篇</b>机器生成证明，平均解一道难题约耗 3 小时 GPT-Pro 级算力 · '
-                 'AHM 声明原话「没人求过你们解这些证明」· OpenAI 此前与普林斯顿高等研究院设过'
-                 '数学与人工智能咨询小组（AGMAI），首份报告即警告「前沿 AI 公司不应擅自测试高深数学难题」，'
-                 'OpenAI 未采纳 · 理论计算机科学家 Scott Aaronson 称其为 Mathocalypse，'
-                 '其妻 Dana Moshkovitz 的「唯一博弈猜想」被宣称已解，她形容读后感受像「致幻剂」 · '
-                 'AHM 指 OpenAI 正因<b>抄袭、侵犯版权、商标淡化</b>等指控面临诉讼 · '
-                 '声明原始出处：陶哲轩博客 2026-10-07 · 图灵奖得主杨立昆<b>持相反立场</b>，'
-                 '认为形式证明将自动化、数学迎来新时代',
-        'limit': '① <b>不是同行评审结果</b>，700 篇全是机器草稿，'
-                 '「已解出」在数学界尚不构成有效结论，Aaronson 与 Moshkovitz 都在强调其不可读；'
-                 '② 数学家内部<b>并非一致</b>——杨立昆公开反对AHM 立场，'
-                 '且 AHM 本身是「自发建立的行业防线」组织，不是官方学会；'
-                 '③ 「抵制」目前是<b>公开声明层面</b>，文中未见任何机构层面的实际断供动作；'
-                 '④ 数字（8000 题／5%／3 小时）均转述自报道，未见 OpenAI 官方原始统计口径。',
-        'fit': '★ 本轮讨论度最高的一条。「数学家集体抵制」有明确的对抗性，'
-               '且陶哲轩是大众认知度极高的名字（不需要科普）。'
-               '<b>但必须带杨立昆的反面意见</b>，否则会被质疑一面之词。',    },
+    '陶哲轩转发抵制声明': {
+        'angle': '钩子是<b>「全世界都在传陶哲轩带头抵制，结果他连会员都不是」这个反转</b>，'
+                 '而不是「数学家抵制 AI」。真正能打的点是<b>抵制方自己被 AI 检测工具判成 100% AI 写</b> ——'
+                 '一场关于「AI 能不能做数学」的争论，先在自己身上翻了车。',
+        'facts': '人类数学协会（AHM，ahmath.org）就 OpenAI 批量发布数学研究成果发声明，'
+                 '呼吁数学家停止与 OpenAI 合作 · 声明原话「一次性发布 700 多个文件并非学术成就的体现，'
+                 '而是<b>权力的炫耀</b>」「我们敦促数学家们停止与 OpenAI 的合作，'
+                 '回归以人类理解为中心的科学理念」「<b>数学家们并没有要求进行这项工作</b>」 · '
+                 '菲尔兹奖得主<b>陶哲轩只是在自己博客转载</b>了这份声明，网传「陶哲轩领衔」不实 ——'
+                 '他本人<b>不在</b>该协会会员名单里 · AHM 成立于 <b>2026 年 8 月</b>，'
+                 '现有 <b>809 名</b>会员，且<b>大多数是研究生</b>；809 人中约 1/3 法国人、1/3 美国人、'
+                 '11 人来自中国 · 入会三项承诺：不向商业 AI 公司提供技术劳动力／数学知识／咨询／宣传；'
+                 '不发表 AI 生成的数学文本；反对 AI 小组的成员在研究工作中不使用 AI 模型 · '
+                 '有人把这份声明丢给 AI 检测工具 Pangram，结果被判 <b>100% 由 AI 生成</b> · '
+                 'OpenAI 公布的 722 篇论文里，<b>只有 162 篇的主要结果经过计算机验证</b>；'
+                 '发布第二天 <b>撤下 3 篇</b>手稿（一处符号错误让核心论证失效，并牵连两篇依赖它的论文），'
+                 '另 <b>14 篇修订</b>、<b>13 篇更新引用</b> · OpenAI 自己的 GitHub 仓库 README 承认'
+                 '「一些未形式化的结果可能存在问题」 · 相关的还有三个组织：mathandai.org（<b>28 位菲尔兹奖得主</b>'
+                 '签署、8000+ 人支持的《人工智能在数学领域严重失衡》宣言）、agmai.org（数学与人工智能咨询小组，'
+                 '高等研究院 IAS 主办，9 位资深数学家，独立无偿）、ahmath.org（AHM 本体） · '
+                 '支持方在 OpenAI 开发者社区做了初步核验：有人重跑「准黎曼结果」的 Lean 检查通过，'
+                 '另一人把矩阵乘法结果推广到更一般的域也通过 · 讨论汇总见 proofsandprompts.com',
+        'limit': '① <b>本条标称 2 源、实为 1 源</b>：36氪该条页面署名「爱范儿 · 2026-10-10 07:19」，'
+                 '是转载 —— <b>做之前必须先补检索</b>（另找一家独立媒体或直接读 AHM 声明原文 ahmath.org）；'
+                 '② <b>「陶哲轩领衔」是全网传播中的失真</b>，写作时如果沿用这个说法，'
+                 '会被更懂的人一眼看穿，反而伤号；'
+                 '③ AHM 是 2026-08 才成立、以研究生为主的新组织，<b>不代表数学界整体立场</b>，'
+                 '不能写成「数学界联合抵制」；'
+                 '④ <b>「700 多篇」与「722 篇」口径不同</b>，两个数字不要混用；'
+                 '⑤ 反对声浪里也夹着站不住的论据（用 AI 检测工具鉴定声明、以及「数学家没要求」这种情绪化表达），'
+                 '直接搬会被质疑；'
+                 '⑥ 数字均转述自媒体报道，未见 OpenAI 官方统计口径。',
+        'fit': '★ 建议做，但<b>要换个讲法</b>：不做「数学界宣战 OpenAI」（事实不成立），'
+               '而做「<b>一场抵制 AI 的声明，被 AI 检测工具判成 100% AI 生成</b>」——'
+               '反转天然、事实有据、不需要读者懂数学。'
+               '⚠️ 单源待核（36氪=爱范儿转载），补到第二个独立来源后再开工。',    },
+    '时强时弱': {
+        'angle': '钩子是<b>「多打两个等号，大模型就不会写代码了」这个可复现的小实验</b>，'
+                 '不是「DeepSeek 翻车」。真正的看点是<b>「同一份资料，只是换个位置，检索准确率差 40 个百分点」</b>——'
+                 '这解释了很多人「明明把资料塞进去了，模型就是找不到」的体感。',
+        'facts': '字节 Seed 团队论文（arXiv 2609.36322，2026-10 上旬）· 命名为 '
+                 '<b>Phase Sensitivity（相位敏感性）</b> · 代码补全实验对象 '
+                 '<b>DeepSeek-V4-Flash-Base</b>：从官方推理代码截一段 FP8 量化函数让模型补全最后一个 token，'
+                 '正确答案是 8；在代码前加一段纯装饰性的文档字符串（重复的等号）后，'
+                 '答案开始<b>以 4 个 token 为周期反复横跳</b>：填充长度模 4 余 0／1 时倾向错误答案 32'
+                 '（平均概率 <b>71.3%</b>，正确答案 8 仅 26.4%），余 2／3 时倾向正确答案 8'
+                 '（平均概率 <b>91.5%</b>，32 仅 7.2%） · 128K 长上下文「大海捞针」（约 '
+                 '<b>1.6 万个键值对</b>）中，只改目标信息相对压缩窗口边界的位置：'
+                 'DeepSeek-V4-Flash-Base 不同位置<b>最大差距 40.2 个百分点</b>，'
+                 'V4-Pro-Base 34.8 个百分点；后训练后明显收窄 —— V4-Flash-0731 降到 19.1、'
+                 'V4-Pro-0813 降到 14.8、<b>V4.1-Flash-0910 降到 6.1</b> 个百分点（周期仍在） · '
+                 '波动周期 V4 是 4 个 token、V4.1 是 2 个，<b>恰好对应两代各自的 KV Cache 压缩步长</b> · '
+                 '作者以 <b>Qwen3-0.6B</b> 为基座自训多种 KV Cache 压缩方案、以全注意力模型为对照：'
+                 '所有分块压缩模型都出现与步长对应的周期性，全注意力基线没有；'
+                 '步长改成 6、8，周期跟着变成 6、8；不用 RoPE 或把可学习压缩权重换成简单平均，现象依旧 · '
+                 '注意力头干预发现 <b>Phase Specialization（相位专门化）</b>：不同头对不同相位贡献不同 · '
+                 '建议评估这类模型时把同一信息放到不同相位分别测，不能只看平均分',
+        'limit': '① <b>本条标称 2 源、实为 1 源</b>：36氪版本页面署名「量子位 · 2026-10-09 15:27」，'
+                 '是转载 —— <b>做之前必须先补检索</b>（至少找到论文原文或第三方复现）；'
+                 '② 论文是 <b>arXiv 预印本，未经同行评审</b>，arXiv 编号 2609.36322 与常规编号格式不符，'
+                 '引用前须核对；'
+                 '③ <b>发文方是字节 Seed，被测对象是竞品 DeepSeek 的模型</b>，'
+                 '方法本身可复现，但动机层面读者一定会质疑，写的时候要主动交代；'
+                 '④ 40.2 个百分点是 <b>未经后训练的 Base 模型</b>最差相位差，'
+                 '最新一代已降到 6.1 个百分点 —— <b>不能写成「DeepSeek 现在很差」</b>；'
+                 '⑤ 「周期 = 压缩步长」的因果解释来自作者<b>自训的小模型</b>（Qwen3-0.6B 级），'
+                 '不是 DeepSeek 官方确认，DeepSeek 未回应；'
+                 '⑥ 全部数字转述自论文与报道，未见第三方独立复现。',
+        'fit': '适合做「反直觉技术科普」：给非技术读者的落点不是 KV Cache，'
+               '而是<b>「为什么同一份资料、模型有时找得到有时找不到」</b>，'
+               '以及可操作的那句——<b>关键信息别放在容易被切走的位置</b>。'
+               '⚠️ 单源待核（36氪=量子位转载），且论文方与竞品关系要主动说明。',    },
     'Instinct': {
         'angle': '钩子是<b>三个反常识数字堆在一起</b>：14 个人、零收入、零 App、估值 100 亿美元。'
                  '但真正的硬料是<b>它没有自己的管道</b>——iMessage 属苹果、WhatsApp 属 Meta、'
@@ -968,15 +1107,20 @@ def _detail(e):
 
 def item_block(e, label, is_pick=False):
     d = _detail(e)
+    n_ind, repost_why = indep_count(e)
     hit = ''
-    if e['n_src'] >= 2:
+    if n_ind >= 2:
         hit += f'<span class="hit">{e["n_src"]} 源命中</span>'
+    elif e['n_src'] >= 2 and n_ind < 2:
+        hit += f'<span class="hit stale">同源转载 · 实为 {n_ind} 源</span>'
     if e.get('must'):
         hit += '<span class="hit must">必抓</span>'
     if e['n_src'] < 2 and not e.get('must'):
         hit += '<span class="hit one">单源待核</span>'
     if d and d.get('stale'):
         hit += '<span class="hit stale">时效存疑</span>'
+    if dup_of(e):
+        hit += f'<span class="hit stale">{RUBRIC_NOTE}</span>'
     hit += ''.join(f'<span class="tag">{html.escape(t)}</span>' for t in hook_tags(e))
     head = (f'<div class="ih"><span class="no">{html.escape(label)}</span>'
             f'<span class="it">{html.escape(e["title"])}</span>{hit}</div>')
@@ -993,12 +1137,21 @@ def item_block(e, label, is_pick=False):
         # 单源条目不做深度核实（只列标题与来源），**不生成任何推测内容**
         srcs = '、'.join(html.escape(s) for s in e['src_names'])
         nature = '、'.join(dict.fromkeys(src_nature(s) for s in e['src_names']))
-        body = (hookline +
-                f'<div class="lab">来源与口径</div>'
-                f'<div class="facts">{srcs}（{nature}）'
-                f'{" · 命中必抓名单，单源也应收录" if e.get("must") else ""} · '
-                f'仅一家报道，<b>未经交叉验证</b>。'
-                f'本条<b>只列不做</b>：单一来源无法判断是否与已有事实冲突。</div>')
+        if e['n_src'] >= 2:
+            # 多源但没有人工核实过的四小节 → 如实说明，**不能套用单源的「仅一家报道」话术**
+            body = (hookline +
+                    f'<div class="lab">来源与口径</div>'
+                    f'<div class="facts">{srcs}（{nature}） · 共 <b>{e["n_src"]} 个来源</b>'
+                    f'{" · 命中必抓名单" if e.get("must") else ""}。'
+                    f'本条<b>只有来源清单，没有人工核实过的四小节</b>——'
+                    f'关键事实与反方意见需回原文自行核，<b>未核前不得当已核实事实使用</b>。</div>')
+        else:
+            body = (hookline +
+                    f'<div class="lab">来源与口径</div>'
+                    f'<div class="facts">{srcs}（{nature}）'
+                    f'{" · 命中必抓名单，单源也应收录" if e.get("must") else ""} · '
+                    f'仅一家报道，<b>未经交叉验证</b>。'
+                    f'本条<b>只列不做</b>：单一来源无法判断是否与已有事实冲突。</div>')
     else:
         body = (hookline +
                 f'<div class="lab">可切入角度</div><div class="txt">{d["angle"]}</div>'
@@ -1010,6 +1163,22 @@ def item_block(e, label, is_pick=False):
             body += (f'<div class="lab">反方 / 局限（写的时候必须带）</div>'
                      f'<div class="cnt">{d["limit"]}</div>')
         body += f'<div class="lab">与账号定位的匹配度</div><div class="fit">{d["fit"]}</div>'
+
+    _n_ind, _why = indep_count(e)
+    if e['n_src'] >= 2 and _n_ind < 2:
+        body += (f'<div class="lab">来源独立性核查</div>'
+                 f'<div class="cnt">标称 <b>{e["n_src"]} 个来源</b>'
+                 f'（{"、".join(html.escape(s) for s in e["src_names"])}），'
+                 f'但按「<b>聚合站与转载不构成第二个来源</b>」的口径，'
+                 f'实际独立来源只有 <b>{_n_ind} 个</b>：{html.escape(_why)}。'
+                 f'→ 本条按 <b>单源待核</b> 处理，做之前必须先补检索。</div>')
+
+    _dup = dup_of(e)
+    if _dup:
+        body += (f'<div class="lab">查重结论</div>'
+                 f'<div class="cnt">与已发成品重合：<code>{html.escape(_dup[1])}</code>'
+                 f'（主题：{html.escape(_dup[0])}）→ <b>本轮不做</b>。'
+                 f'同一事件做过就不再重复出稿，只作为背景信息保留。</div>')
 
     lk = ''
     if e.get('url_ok'):
@@ -1033,6 +1202,10 @@ def row_block(e, idx):
         meta += f' · 钩子 {html.escape(tags)}'
     if e.get('must'):
         meta += ' · <b>命中必抓名单</b>'
+    _dp = dup_of(e)
+    if _dp:
+        meta += (f' · <b style="color:#B91C1C">与已发成品重合'
+                 f'（{html.escape(_dp[1])}）· 不做</b>')
     return (f'<tr><td class="n">{idx:02d}</td>'
             f'<td>{flag}{html.escape(e["title"])}<div class="sub">{meta}</div></td>'
             f'<td class="src">{srcs}<div class="sub">{nature}</div></td></tr>')
@@ -1044,6 +1217,9 @@ def must_block(e, idx):
     link = (f'<a href="{html.escape(e["url"])}">原文</a>' if e.get('url_ok')
             else '⚠️ 链接失效')
     sub = html.escape(str(e.get('must') or '')) + (f' · 钩子 {html.escape(tags)}' if tags else '')
+    _dp = dup_of(e)
+    if _dp:
+        sub += (f' · <b style="color:#B91C1C">与已发成品重合（{html.escape(_dp[1])}）· 不做</b>')
     return (f'<tr><td class="n">{idx:02d}</td>'
             f'<td>{html.escape(e["title"])}<div class="sub">{sub}</div></td>'
             f'<td class="src">{html.escape("、".join(e["src_names"]))}'
@@ -1061,6 +1237,9 @@ def hook_block(e, label):
     link = (f'<a href="{html.escape(e["url"])}">原文</a>' if e.get('url_ok')
             else '⚠️ 链接失效')
     tags = ''.join(f'<span class="tag">{html.escape(t)}</span>' for t in hook_tags(e))
+    _dp = dup_of(e)
+    _dpnote = (f' <b style="color:#B91C1C">· 与已发成品重合（{html.escape(_dp[1])}）· 不做</b>'
+               if _dp else '')
     return (f'<div class="item hook"><div class="ih">'
             f'<span class="no hk">{html.escape(label)}</span>'
             f'<span class="it">{html.escape(e["title"])}</span>'
@@ -1068,7 +1247,7 @@ def hook_block(e, label):
             f'<div class="lab">命中的钩子词</div><div class="txt">{seg}</div>'
             f'<div class="lab">来源与口径</div>'
             f'<div class="facts">{srcs}（{nature}）· 单源未交叉验证，'
-            f'钩子只说明「值得看一眼」，<b>做之前必须回原文核实</b>。</div>'
+            f'钩子只说明「值得看一眼」，<b>做之前必须回原文核实</b>。{_dpnote}</div>'
             f'<div class="lk">原文：{link}</div></div>')
 
 
@@ -1304,6 +1483,24 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
     # 必抓已限定 AI 类（2026-10-09 用户定）→ 不需要再按类拆分计数
     n_si_ai = sum(1 for e in single_items if e['cat'] == 'AI')
 
+    # ---------- 本轮「去重命中」与「停更节点」两张动态表 ----------
+    _all_items = multi + must_items + hooks + single_items
+    _dup_hits = []
+    for e in _all_items:
+        _d = dup_of(e)
+        if _d and _d not in _dup_hits:
+            _dup_hits.append(_d)
+    dup_html = ('；'.join(f'<code>{html.escape(d)}</code>（{html.escape(t)}）'
+                          for t, d in _dup_hits) or '本轮池内<b>无</b>与已发成品重合的条目')
+    stale_rows = ''.join(
+        f'<tr><td>{html.escape(n)}</td><td>{html.escape(ev)}</td>'
+        f'<td><b>{html.escape(act)}</b></td></tr>' for n, ev, act in STALE_NODES)
+    probe_time = PROBE_TIME
+    websearch_note = WEBSEARCH_NOTE
+    # 多源候选按**独立来源数**再分一层：标称多源但实为转载／聚合的单独计数
+    n_multi_ind = sum(1 for e in multi if indep_count(e)[0] >= 2)
+    n_repost = len(multi) - n_multi_ind
+
     out = [f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1321,13 +1518,16 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
 检索时点：<b>{now}（GMT+8）</b> · 本文件<b>同时收录 AI 与科技两类</b>，
 每章内部再分「AI / 科技」小节，条目上保留类别标识。
 章节顺序：推荐 → 多源候选 → <b>钩子候选</b> → 必抓更新 → 单源候选。
-主表收<b>≥2 个不同来源报道同一事件</b>的条目，以及<b>命中 AI 必抓名单</b>的条目
-（官方发布常只有 1 家报道，单源也收；<b>必抓只针对 AI 类，科技类不设</b>）。排序按 命中源数 → 钩子强度 → 热度。
+主表收<b>≥2 家不同媒体各自成稿</b>的条目，以及<b>命中 AI 必抓名单</b>的条目
+（官方发布常只有 1 家报道，单源也收；<b>必抓只针对 AI 类，科技类不设</b>）。
+⚠️ <b>同一篇稿件被转载／被聚合站收录，只算一个来源</b>——这类条目会打「同源转载」标，
+按<b>单源待核</b>处理。排序按 独立来源数 → 钩子强度 → 热度。
 <b>编号即建议制作顺序</b>（`A`＝AI，`T`＝科技，`H`＝钩子候选，`M`＝推荐里补位的必抓条目）。
 </div>
 
 <div class="stat">
-  <div><b>{len(multi)}</b><span>多源候选（AI {n_multi_ai} / 科技 {len(multi) - n_multi_ai}）</span></div>
+  <div><b>{n_multi_ind}</b><span>独立多源候选（≥2 家不同媒体各自成稿）</span></div>
+  <div><b>{n_repost}</b><span>同源转载（标称多源 · 实为 1 源）</span></div>
   <div><b>{len(hooks)}</b><span>钩子候选（AI {n_hk_ai} / 科技 {len(hooks) - n_hk_ai}）</span></div>
   <div class="must"><b>{len(must_items)}</b><span>必抓更新（仅 AI 类）</span></div>
   <div><b>{n_verified}</b><span>已逐条核实</span></div>
@@ -1355,7 +1555,9 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
 
     # ---------- 多源候选 ----------
     if multi:
-        out.append(f'<h2>多源候选（{len(multi)} 条 · 编号 A01 / T01 起）</h2>')
+        _mh = (f'多源候选（{len(multi)} 条 · 其中<b>独立多源 {n_multi_ind} 条</b>、'
+               f'同源转载 {n_repost} 条 · 编号 A01 / T01 起）')
+        out.append(f'<h2>{_mh}</h2>')
         out.append(_cat_group(multi, lambda e: item_block(
             e, labels.get(e['title'], ''), is_pick=e['title'] in pset)))
 
@@ -1375,7 +1577,11 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
                    '<div class="box key">'
                    '<p>命中<b>AI 必抓名单</b>且带「发布／上线／更新」语义的条目，多为官方发布，'
                    '常只有一家报道。此处只做<b>线索收录</b>——要做图文仍需回原文核实。'
-                   f'全表最多列 {MUST_CAP} 条<span style="color:#6B7280">（必抓只针对 AI 类，科技类不设）</span>。</p>'
+                   f'全表最多列 {MUST_CAP} 条<span style="color:#6B7280">（必抓只针对 AI 类，科技类不设）</span>。'
+                   '⚠️ 本表来源集中在 <b>AIbase／AI工具集</b> 这类<b>条目库／日报型</b>节点，'
+                   '这些节点当日与昨日高度重合，<b>条目的发布时间可能早于今天</b> —— '
+                   '选中后<b>必须先回原页核日期</b>，再判断是否已发过。'
+                   '与已发成品重合的条目已在表内标红。</p>'
                    '</div>')
         out.append(_cat_table(must_items, must_block))
 
@@ -1417,35 +1623,82 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
 <h2>去重与不做</h2>
 <div class="box">
 <ul>
+  <li><b>与已发成品重合（不做）</b>：先列 <code>C:\\小红书\\</code> 与 <code>C:\\抖音\\</code> 下
+    <code>YYYYMMDD_主题</code> 形式的成品目录逐一比对，本轮池内命中以下已发主题，
+    同一事件<b>不重复出稿</b>，只在条目上打红标并保留作背景：{dup_html}</li>
   <li><b>不做厂商软文</b>：剔除「量子位的朋友们」这类付费推广栏（通篇「重塑生产力边界」营销话术，无独立信息）。</li>
-  <li><b>不做链接失效且无有效佐证</b>的条目：爱范儿节点在 tophub 上给的链接本身就是
-    <code>ifanr.com/False</code>（源站就是坏的，<b>不是解析问题</b>）；有其他源佐证的会在卡片里标出可用链接。</li>
+  <li><b>不做链接失效且无有效佐证</b>的条目：爱范儿节点在 tophub 上给的链接<b>有时</b>是
+    <code>ifanr.com/False</code>（源站就是坏的，<b>不是解析问题</b>；本轮该节点链接正常）；
+    有其他源佐证的会在卡片里标出可用链接。</li>
   <li><b>不把同一站点的两个节点当两个源</b>：「少数派」与「少数派最新」是同一媒体，
     同一篇文章会两边同时出现，已按媒体归一去重——否则会凭空多出假的「2 源命中」。</li>
-  <li><b>不把 HF 社区衍生版当官方发布的佐证</b>：官方发布与 HF 上的同代 GGUF／微调版是<b>同代不同物</b>，不能互相印证。</li>
+  <li><b>转载与聚合站不算第二个来源</b>（本轮新增口径）：同一篇稿件换站再发仍是<b>一个新闻源</b>。
+    本轮实测到 3 处，全部回原页核对署名后按 1 源处理：
+    ①「陶哲轩转发抵制声明」36氪 AI 频道页面署名「爱范儿 · 2026-10-10 07:19」；
+    ②「字节找到 DeepSeek 时强时弱的原因」36氪 24h 页面署名「量子位 · 2026-10-09 15:27」；
+    ③「OpenAI dots 登陆手机」Readhub 为纯聚合站，该 topic 下同时列出 51CTO／36Kr／投资界同一篇稿。
+    ⚠️ 这类条目仍留在表里（有阅读价值），但标红并按<b>单源待核</b>对待。</li>
+  <li><b>不把 HF / GitHub 社区衍生版当官方发布的佐证</b>：HF / GitHub 只作<b>佐证与榜单位置</b>，
+    同代 GGUF／微调版与官方发布是<b>同代不同物</b>，不能互相印证。</li>
+  <li><b>英文条目不进推荐</b>：Hacker News／GitHub 的英文标题不适合中文图文，
+    本轮只留在<b>钩子候选与单源候选</b>里备查，<b>不参与「本轮推荐」</b>。
+    ⚠️ GitHub Trending 与 HuggingFace 是<b>榜单源</b>（标题由脚本按模板拼），
+    也不参与「必抓」判定。</li>
 </ul>
+</div>
+
+<h2>时效性自检（节点停更）</h2>
+<div class="box warn">
+<p>用户规则 5：<b>连续两天返回同样条目的节点视为停更，本轮划掉、不参与合并</b>。
+本轮实测（与 10-09 同节点条目逐条对账）：</p>
+<table class="tb"><tr><th>节点</th><th>本轮实测</th><th>处理</th></tr>{stale_rows}</table>
+<p>其余节点当轮都有刷新，但<b>刷新程度差别很大</b>，读的时候要分开看：<br>
+<b>① 当日全量刷新（与昨日零重合）</b>：36氪AI 频道（30/30 新增）、量子位（10）、IT之家（12）、
+Readhub（20）、36氪 24h（8）。<b>② 高重合、须回原页核日期</b>：AIbase 9/10、少数派 19/20、
+掘金 18/20、虎嗅 13/15、少数派最新 8/10，以及 AI工具集 5/10 ——
+这类节点是<b>日报／条目库形态</b>（AIbase 尤其滞后），<b>表内条目的发布时间必须回原文核</b>，
+不得当当日新闻用；本轮的「必抓更新」表因此以它们为主，已逐条打上来源可查链接。
+<b>③ 正常滚动</b>：MIT TR 6/10、果壳 6/10、爱范儿 3/10（周更／慢更栏目天然重合）。</p>
 </div>
 
 <h2>元信息与本轮局限</h2>
 <div class="box warn">
 <ul>
-  <li><b>采集源</b>：{n_src_total} 个 —— tophub 17 节点（7 AI + 10 科技）、
-    Hacker News 官方 Firebase API、HuggingFace Trending 模型、GitHub Trending 日榜。</li>
-  <li><b>未采到的源</b>：Reddit（r/LocalLLaMA 等）与 arXiv RSS 本轮<b>未取到</b>——
-    直连被拒／301，<b>是源受限不是规则排除</b>，可补跑。
-    Hacker News 走的是官方 Firebase API（<code>news.ycombinator.com</code> 与
-    <code>api.github.com</code> 本机不通，只有 <code>hacker-news.firebaseio.com</code> 稳定）。</li>
+  <li><b>采集源</b>：本轮实际进入合并的源 {n_src_total} 个 —— tophub <b>14 个节点</b>
+    （AI 板块 5 个：36氪 AI 频道、量子位、AIbase、AI工具集、掘金；
+    科技板块 9 个：IT之家日榜、Readhub、36氪 24h、爱范儿、果壳科学人、少数派、少数派最新、虎嗅热文、
+    MIT Tech Review）＋ Hacker News 官方 Firebase API ＋ HuggingFace Trending 模型 ＋
+    GitHub Trending 日榜。<b>另有 3 个节点本轮被划掉</b>（见上一节时效性自检）。</li>
+  <li><b>代理 / VPN 实测（{probe_time}）</b>：按规则 8 逐个端口实测
+    <code>curl --noproxy '*' -x http://127.0.0.1:&lt;port&gt; https://www.google.com</code>，
+    10808 / 7890 / 7897 / 2800 四个端口<b>全部返回 000</b>，不带代理直连 google 同为 000 ——
+    <b>按规则判为 VPN 未开</b>。补充实测：<code>hacker-news.firebaseio.com</code> 直连为
+    <b>200</b>，故 Hacker News 本轮<b>照常采到</b>（特此注明，<b>不是「网络不可达」</b>）；
+    HuggingFace API 在本机单独复测为 000、经脚本 4 次重试后取到，属代理节点轮换的时点波动。</li>
+  <li><b>未采到的源</b>：Reddit（r/LocalLLaMA 等，<code>.rss</code>）直连与经 SOCKS5 均
+    <b>000</b>；arXiv RSS（cs.AI / cs.LG）返回 <b>301</b>。两者<b>是源受限不是规则排除</b>，
+    待网络条件允许可补跑。</li>
+  <li><b>境外聚合站</b>：本轮用检索服务侧（WebSearch）限定
+    <code>officechai.com</code> / <code>dataconomy.com</code> / <code>the-decoder.com</code> 等域名补检，
+    结果见下（{websearch_note}）。⚠️ 检索侧通道<b>不依赖本机 VPN</b>，与上面的代理实测是两回事。</li>
   <li><b>分类口径</b>：AI / 科技按标题关键词判定，<b>会有少量跨类内容</b>
     （如「AI 芯片」既算 AI 也算科技）。本文件两类同页展示、逐条标注类别；
     若某条归错，以条目上的赛道标签为准，不影响它本身的可用性。</li>
   <li><b>热度口径互不相通</b>：tophub 站内值、IT 之家「N 评」（评论数）、虎嗅（阅读量）、
-    HN 得分、HF trendingScore <b>不可横向比较</b>，只在命中源数与钩子强度相同时作次级参考。</li>
+    HN 得分、HF trendingScore <b>不可横向比较</b>；本池多数 tophub 节点<b>没有热度字段</b>，
+    因此统一用<b>「命中源数量」代替热度信号</b>，只在源数相同时才看次级热度。</li>
   <li><b>数字可信度分层</b>：本池所有性能与业务数字均来自<b>厂商自测或媒体报道</b>；
-    做图文时凡写「最强 / 领先 / 零成本」必须带反方。</li>
+    凡不是多源一致或官方直接发布的数字，条目上都会标「据报道」或「单源待核」，
+    做图文时写「最强 / 领先 / 零成本」必须带反方。</li>
+  <li><b>单源待核（红标）</b>：只命中 1 个来源的条目一律标红，<b>做之前必须先补检索</b>——
+    单源不代表假，只代表<b>还没核</b>。</li>
   <li><b>跨源判同口径</b>：判同只在两种情况成立 —— ① 两条标题共有一个<b>带数字的型号</b>
-    （Qwen-Image-2.1 / Haiku 5.5）；② 共有一个<b>具体产品／技术实体</b>且标题相似度足够高。
-    <b>只共现厂商名或产品线词（iphone / agent / 某厂名）不判同</b> ——
-    宁可漏合（降级为单源）不可错合，错合会凭空造出「N 源命中」的假交叉核验。</li>
+    （Qwen-Image-2.1 / Haiku 5.5）；② 共有<b>两个以上非通用实体</b>且标题字符二元组相似度 ≥ 0.5。
+    <b>只共现厂商名或产品线词（iphone / agent / pro / 某厂名）一律不判同</b> ——
+    宁可漏合（降级为单源）不可错合，错合会凭空造出「N 源命中」的假交叉核验。
+    ⚠️ 本轮修正了一处护栏漏洞：「iPhone 18 Pro」会被拆成 <code>iphone</code> + <code>pro</code>
+    两个实体，绕过「只共现产品线词不判同」，把三条<b>不同</b>的 iPhone 18 Pro 新闻并成一条；
+    已把产品线词与产品修饰词整体列入通用词剔除。</li>
 </ul>
 </div>
 

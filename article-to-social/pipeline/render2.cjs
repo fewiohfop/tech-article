@@ -136,6 +136,58 @@ function measureCard(card) {
   };
 }
 
+/* ---------- 页面内执行：封面大字自适应字号（2026-10-10）----------
+   背景：封面 2~3 行大字的字号原来靠人手写 title_fs/title2_fs 逐条试，
+   长行（含英文）经常放不下 → 折行（WRAP）。这里按行数取基准字号，
+   再用 Range 实测每行真实文本宽，收缩到「刚好放得下」。
+   模式：uniform（默认，全卡大字同号，取最紧那行）/ line（每行各自取最大）。
+   ⚠️ 只处理带 .linesN 的封面；行内已写死 font-size 的行视为人工指定，跳过。 */
+function autofitCovers() {
+  const out = [];
+  for (const card of document.querySelectorAll('.card.cover')) {
+    if (!/(^|\s)lines[123](\s|$)/.test(card.className)) continue;
+    const bigs = Array.from(card.querySelectorAll('.cv-title,.cv-title2,.cv-title3'))
+      .filter((el) => !el.style.fontSize);
+    if (!bigs.length) continue;
+
+    const cs = getComputedStyle(card);
+    const avail = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const base = parseFloat(cs.getPropertyValue('--fs-cv-title')) || 118;
+    const mode = card.getAttribute('data-fit') || 'uniform';
+
+    // 归位到基准字号 + 不换行，实测每行真实文本宽
+    const widths = bigs.map((el) => {
+      el.style.fontSize = base + 'px';
+      el.style.whiteSpace = 'nowrap';
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      return r.getBoundingClientRect().width;
+    });
+
+    const fitOf = (w) => Math.floor(base * (avail - 4) / w);
+    const sizes = mode === 'line'
+      ? widths.map((w) => Math.min(base, fitOf(w)))
+      : bigs.map(() => Math.min(base, fitOf(Math.max(...widths))));
+
+    // 收敛校验：字号的取整可能仍差 1px，最多补两轮
+    for (let k = 0; k < 3; k++) {
+      bigs.forEach((el, i) => { el.style.fontSize = sizes[i] + 'px'; el.style.whiteSpace = 'nowrap'; });
+      let again = false;
+      bigs.forEach((el, i) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        if (r.getBoundingClientRect().width > avail - 1) { sizes[i] -= 1; again = true; }
+      });
+      if (!again) break;
+    }
+    bigs.forEach((el, i) => { el.style.fontSize = sizes[i] + 'px'; el.style.whiteSpace = ''; });
+    // 行距随字号等比：字小一点、行距也收一点，密度才均匀
+    if (mode !== 'line') card.style.setProperty('--cv-tgap', Math.round(sizes[0] * 0.22) + 'px');
+    out.push({ name: card.getAttribute('data-export'), mode, base, avail: Math.round(avail), sizes });
+  }
+  return out;
+}
+
 /* ---------- 页面内执行的 autogap：线性解算 ---------- */
 function autogapOne(cfg) {
   const { name, gapMin, gapMax, target, lo, hi } = cfg;
@@ -241,6 +293,9 @@ function autogapOne(cfg) {
     await page.goto(pathToFileURL(HTML).href, { waitUntil: 'load', timeout: 60000 });
     await page.evaluate(() => document.fonts.ready); // 代替死等 2.5s
 
+    // ---- 封面大字自适应（必须在测量/截图之前，否则拿到的是旧字号）----
+    const fitted = await page.evaluate(autofitCovers);
+
     // ---- 先测量原始状态 ----
     let rows = await page.evaluate((fn) => {
       const f = new Function('return (' + fn + ')')();
@@ -309,6 +364,11 @@ function autogapOne(cfg) {
         '  ' + v.padEnd(9) + extra +
         (r.overflowPx > 2 ? '  overflow=' + r.overflowPx + 'px' : '')
       );
+    }
+    for (const f of fitted) {
+      const changed = f.sizes.some((s) => s !== f.base);
+      console.log((changed ? '  fit ' : '  fit ') + f.name +
+        '  ' + f.mode + '  base=' + f.base + ' -> [' + f.sizes.join(', ') + ']px');
     }
     const cnt = (k) => rows.filter((r) => r.verdict === k).length;
     console.log('  SUMMARY  LOW=' + cnt('LOW') + ' CROWD=' + cnt('CROWD') +
