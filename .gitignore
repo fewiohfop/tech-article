@@ -1,10 +1,11 @@
-# 本仓库的工作树 = 本机 skills 目录，只跟踪下面两支 skill。
+# 本仓库的工作树 = 本机 skills 目录，只跟踪下面几支。
 /*
 !/.gitignore
 !/.gitattributes
 !/README.md
 !/article-to-social/
 !/github-trending-official/
+!/topic-pool/
 
 # 本机配置（每台机器不同，不进仓库）
 config.json

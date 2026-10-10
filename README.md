@@ -1,6 +1,6 @@
 # 图文内容生产 Skill 集（小红书 / 抖音）
 
-两支 WorkBuddy skill 的组合仓库，用于把一篇文章或一个选题做成**小红书 / 抖音图文卡片**。
+两支 WorkBuddy skill 的组合仓库（另附一支选题池脚本镜像），用于把一篇文章或一个选题做成**小红书 / 抖音图文卡片**。
 
 ## 为什么是两支（2026-10-06 合并说明）
 
@@ -16,12 +16,13 @@
 
 **合并后行为不变**：出图与两支旧 skill **MD5 16/16 逐字节一致**。
 
-| skill | 职责 |
+| 目录 | 职责 |
 |---|---|
 | `article-to-social` | 文章/选题 → 小红书 + 抖音图文（卡片 PNG + 文案 + 汇总 HTML） |
 | `github-trending-official` | 选题发现第 ② 线：GitHub 榜单 / 项目推荐成图文 |
+| `topic-pool` | 选题发现第 ① 线：AI 科技选题池（**脚本镜像，非 skill**，运行目录在 `C:\srtwb\pool\`） |
 
-两者关系：`github-trending-official` 产出选题 → 交 `article-to-social` 做图文与发布。
+关系：两支选题线的产出 → 交 `article-to-social` 做图文与发布。
 
 ## 目录结构
 
@@ -57,10 +58,14 @@
 │       ├── bgm.md                      # 抖音配乐
 │       ├── why-no-autopublish.md       # 为什么不自动发布
 │       └── publish-automation-quark.md # 抖音半自动填充（停在发布页）
-└── github-trending-official/           # 选题发现（GitHub 榜单 / 项目推荐）
-    ├── SKILL.md
-    ├── scripts/  （trending 抓取 / 榜单拼版）
-    └── references/
+├── github-trending-official/           # 选题发现（GitHub 榜单 / 项目推荐）
+│   ├── SKILL.md
+│   ├── scripts/  （trending 抓取 / 榜单拼版）
+│   └── references/
+└── topic-pool/                         # 选题发现 ① 线（脚本镜像，非 skill）
+    ├── run_daily.sh                    # 一键：抓取 → 解析 → 出选题池
+    ├── make_pool.py                    # 去重 / 跨源合并 / 排序 / 出 HTML
+    └── fetch_*.py / parse_*.py         # 各源抓取与解析
 ```
 
 ## 环境要求
@@ -181,7 +186,7 @@ python pipeline/make.py <工作目录> --tag 20261005_主题   # 出图 + 交付
 如果你在本机直接使用本仓库（而非 clone 到别处）：
 
 - **不要执行 `git clean -xdf`** —— 其余未跟踪的 skill 会被一并清掉（**这是本仓库唯一危险的命令**）；
-- `.gitignore` 用的是白名单写法（先排除顶层一切，再放行上面两个目录），
+- `.gitignore` 用的是白名单写法（先排除顶层一切，再放行上面几个目录），
   在本机新增的其他 skill **不会被误提交**；
 - 新增/切换设备时，改用 `git clone` 到独立目录更省心。
 
