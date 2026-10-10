@@ -43,19 +43,29 @@ def main():
     if xd:
         jobs.append((os.path.join(work, "out_xhs"),
                      os.path.join(xd, "小红书_%s.html" % xhs_name),
-                     os.path.join(work, "meta_xhs.json")))
+                     os.path.join(work, "meta_xhs.json"),
+                     "xhs"))
     if yd:
         jobs.append((os.path.join(work, "out_dy"),
                      os.path.join(yd, "抖音_%s.html" % dy_name),
-                     os.path.join(work, "meta_dy.json")))
-    for cards, out, meta in jobs:
+                     os.path.join(work, "meta_dy.json"),
+                     "dy"))
+    for cards, out, meta, plat in jobs:
         if not os.path.isdir(cards):
             continue
-        cmd = [PY, PREVIEW, "--cards", cards, "--out", out]
+        # ⚠️ 必须传 --platform：2026-10-09 前漏传，模板里「小红书」写死 →
+        # 交付的「抖音_xxx.html」打开全是小红书字样（用户实测发现）。
+        cmd = [PY, PREVIEW, "--cards", cards, "--out", out, "--platform", plat]
         if os.path.exists(meta):
             cmd += ["--meta", meta]
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         print((r.stdout or "").strip() or (r.stderr or "").strip())
+        # 2026-10-06：把 meta 一并复制到交付目录。
+        # 汇总 HTML 重构后 <title> 变成通用串「小红书图文笔记」，标题只存于 meta；
+        # build_index.py 靠 meta 取标题，缺了就只能显示通用串。
+        if os.path.exists(meta) and out:
+            shutil.copy2(meta, os.path.join(os.path.dirname(out),
+                                            os.path.basename(meta)))
 
     for p in targets:
         print(p, "->", len([f for f in os.listdir(p) if f.lower().endswith(".png")]), "张 PNG",

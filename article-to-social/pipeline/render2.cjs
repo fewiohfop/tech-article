@@ -11,7 +11,7 @@
  * 用法:
  *   node render2.cjs --html a.html --out dirA [--html b.html --out dirB] \
  *        [--scale 2] [--autogap] [--gap-min 20] [--gap-max 70] \
- *        [--fill-lo 78] [--fill-hi 90] [--report out.json] [--no-shot]
+ *        [--fill-lo 58] [--fill-hi 92] [--report out.json] [--no-shot]
  *
  * 说明:
  *   - 目标填充度默认 78%~90%（内容底部占卡片高度，不含贴底脚注）
@@ -72,7 +72,9 @@ function parseArgs(argv) {
   let cur = null;
   const o = {
     scale: 2, autogap: false, report: null, shot: true,
-    gapMin: 20, gapMax: 70, fillLo: 78, fillHi: 90,
+    // 2026-10-08：fillLo 78 → 58。用户口径「填充占 60% 以上就够，别为补密度加内容」。
+    // LOW 只是「偏松」的读数，不再是需要修的问题；真正要修的是 CROWD / OVERFLOW / WRAP。
+    gapMin: 20, gapMax: 70, fillLo: 58, fillHi: 92,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -113,7 +115,7 @@ function measureCard(card) {
   }
 
   const lines = {};
-  for (const sel of ['.cv-title', '.cv-title2', '.in-title']) {
+  for (const sel of ['.cv-title', '.cv-title2', '.cv-title3', '.in-title']) {
     const el = card.querySelector(sel);
     if (!el) continue;
     const lh = parseFloat(getComputedStyle(el).lineHeight);

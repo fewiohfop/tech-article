@@ -73,6 +73,9 @@ DEFAULT_OUT = cfg_dir(
     "INDEX_OUT", "index_out", os.path.join(DEFAULT_XHS, "内容成品总索引.html")
 )
 
+# 选题池统一目录（2026-10-08 起选题只出一份放这里；两个平台目录只放成品）
+TOPIC_DIR = cfg_dir("TOPIC_DIR", "topic_dir", r"C:\选题")
+
 # 非成品目录（不作为成品列出）
 SKIP_DIRS = {"合集封面", "发布助手", "选题", "选题池", ".workbuddy", "_build"}
 
@@ -85,20 +88,81 @@ DATE_RE = re.compile(r"^(\d{8})_(.+)$")
 # ---------------------------------------------------------------- 工具
 
 
-def read_title(path):
-    """从汇总 HTML 的 <title> 里取主题名，并去掉尾部平台后缀。"""
+def _pick_meta_title(full, platform):
+    """从成品目录里的 meta_*.json 取标题候选（优先事实型/数据型）。
+
+    2026-10-06：汇总 HTML 重构后 <title> 变成通用串「小红书图文笔记」，
+    标题只存在于 meta_*.json 与封面图名里，所以这里补一路来源。
+    """
+    names = ["meta_dy.json", "meta_xhs.json"] if platform == "抖音" else \
+            ["meta_xhs.json", "meta_dy.json"]
+    for fn in names:
+        p = os.path.join(full, fn)
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                j = json.load(f)
+        except Exception:
+            continue
+        titles = j.get("titles") or []
+        cand = [t.get("text", "").strip() for t in titles if isinstance(t, dict)]
+        cand = [c for c in cand if c]
+        if not cand:
+            continue
+        # 事实型 → 数据型 → 第一条
+        order = {"事实型": 0, "数据型": 1, "情绪型": 2}
+        best, best_rank = cand[0], 99
+        for t in titles:
+            txt = (t.get("text") or "").strip()
+            if not txt:
+                continue
+            rank = order.get(t.get("style", ""), 1)
+            if rank < best_rank:
+                best, best_rank = txt, rank
+        return best
+    return ""
+
+
+def read_title(path, full=None, platform=None):
+    """取成品标题。
+
+    来源优先级（前者覆盖后者）：
+      1. meta_*.json 的标题候选 —— 汇总 HTML 的 <title> 已被重构成通用串，不可信
+      2. 汇总 HTML 的 <title>（去掉「· 小红书图文成品」这类尾巴）
+      3. 封面图文件名（01-封面.png 无信息，跳过）
+    """
+    # 1. meta 优先
+    if full and platform:
+        t = _pick_meta_title(full, platform)
+        if t:
+            return t
+
+    # 2. <title>
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             raw = f.read(30000)
         m = re.search(r"<title>(.*?)</title>", raw, re.S)
-        if not m:
-            return ""
-        t = html.unescape(m.group(1).strip())
-        # 去掉「· 小红书图文成品」这类尾巴
-        t = re.sub(r"\s*[·|]\s*[^·|]*图文成品\s*$", "", t).strip()
-        return t
+        if m:
+            t = html.unescape(m.group(1).strip())
+            t = re.sub(r"\s*[·|]\s*[^·|]*图文成品\s*$", "", t).strip()
+            # 通用串（重构后的占位标题）视为无效标题，继续往下找
+            generic = {"小红书图文笔记", "抖音图文笔记", "图文笔记", "图文成品"}
+            if t and t not in generic:
+                return t
     except Exception:
-        return ""
+        pass
+
+    # 3. 封面图文件名回退
+    if full:
+        try:
+            for f in sorted(os.listdir(full)):
+                m = re.match(r"^01-(.+)\.png$", f, re.I)
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+    return ""
 
 
 def file_url(path):
@@ -125,8 +189,27 @@ def human_size(n):
 # ---------------------------------------------------------------- 扫描
 
 
+def _topic_kind(fname):
+    """选题池按文件名归到两条线，用于索引里的类别标签。
+
+    2026-10-09 起选题池拆成两份（AI/科技各一份），标签随之细分。
+    ⚠️ 必须先判旧的合并版名（`…AI科技选题池…`）——它同时包含「AI选题池」
+    和「科技选题」两个子串，放在后面判会被错标成「科技选题」。
+    """
+    if "GitHub" in fname:
+        return "② GitHub 周榜"
+    if "AI科技选题池" in fname:
+        return "① AI+科技（合并版）"
+    if "AI选题池" in fname:
+        return "① AI 选题"
+    if "科技选题池" in fname:
+        return "① 科技选题"
+    return "① AI 科技"
+
+
 def scan(roots):
     items, picks = [], []
+    seen_pick = set()
 
     for root, platform in roots:
         if not os.path.isdir(root):
@@ -136,14 +219,15 @@ def scan(roots):
             if not os.path.isdir(full):
                 continue
             if name in SKIP_DIRS:
-                # 选题类目录单独收集
+                # 选题类目录单独收集（历史遗留：目录已迁到 TOPIC_DIR，这里只做兼容）
                 if name in SELECTION_DIR_NAMES:
                     for f in sorted(os.listdir(full)):
-                        if f.lower().endswith((".html", ".htm")):
+                        if f.lower().endswith((".html", ".htm")) and f not in seen_pick:
+                            seen_pick.add(f)
                             fp = os.path.join(full, f)
                             picks.append(
                                 {
-                                    "platform": platform,
+                                    "platform": _topic_kind(f),
                                     "file": f,
                                     "path": fp,
                                     "size": os.path.getsize(fp),
@@ -181,10 +265,27 @@ def scan(roots):
                     "dir": full,
                     "html": main,
                     "html_name": htmls[0],
-                    "title": read_title(main) or m.group(2),
+                    "title": read_title(main, full, platform) or m.group(2),
                     "png": len(pngs),
                     "size": os.path.getsize(main),
                     "mtime": mtime_str(main),
+                }
+            )
+
+    # 统一选题目录（2026-10-08 起所有选题只出一份、集中放这里）
+    if os.path.isdir(TOPIC_DIR):
+        for f in sorted(os.listdir(TOPIC_DIR)):
+            if not f.lower().endswith((".html", ".htm")) or f in seen_pick:
+                continue
+            seen_pick.add(f)
+            fp = os.path.join(TOPIC_DIR, f)
+            picks.append(
+                {
+                    "platform": _topic_kind(f),
+                    "file": f,
+                    "path": fp,
+                    "size": os.path.getsize(fp),
+                    "mtime": mtime_str(fp),
                 }
             )
 
@@ -197,7 +298,12 @@ def scan(roots):
 
 
 def badge(platform):
-    cls = "xhs" if platform == "小红书" else "dy"
+    if platform == "小红书":
+        cls = "xhs"
+    elif platform == "抖音":
+        cls = "dy"
+    else:
+        cls = "tp"          # 选题池：不分平台，标所属线
     return '<span class="pf %s">%s</span>' % (cls, platform)
 
 
@@ -248,11 +354,12 @@ def render(items, picks, roots):
     roots_txt = " · ".join(
         "%s（%s）" % (r, p) for r, p in roots if os.path.isdir(r)
     )
+    if os.path.isdir(TOPIC_DIR):
+        roots_txt += " ｜ 选题：%s" % TOPIC_DIR
 
     return """<!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
+<head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>内容成品总索引</title>
 <style>
@@ -288,6 +395,7 @@ def render(items, picks, roots):
     padding:3px 10px;white-space:nowrap}}
   .pf.xhs{{background:#FFEDEF;color:#D92B3E}}
   .pf.dy{{background:#E9F1FE;color:#185FA5}}
+  .pf.tp{{background:#F3F4F6;color:#374151}}
   td.t .nm{{font-size:16px;font-weight:600;color:#111827;line-height:1.5}}
   td.t .meta{{font-size:12.5px;color:#9CA3AF;margin-top:4px}}
   td.a{{width:132px;text-align:right}}
@@ -329,9 +437,9 @@ def render(items, picks, roots):
   </section>
 
   <section>
-    <h2>选题池 <em>每期的候选清单</em></h2>
+    <h2>选题池 <em>每期的候选清单 · 统一存放于 {topic_dir}</em></h2>
     <table>
-      <thead><tr><th>平台</th><th>文件</th><th></th></tr></thead>
+      <thead><tr><th>类别</th><th>文件</th><th></th></tr></thead>
       <tbody>
 {picks}
       </tbody>
@@ -351,6 +459,7 @@ def render(items, picks, roots):
         np=len(picks),
         rows="\n".join(rows) if rows else '<tr><td colspan="4" style="color:#9CA3AF">暂无成品</td></tr>',
         picks="\n".join(pick_rows) if pick_rows else '<tr><td colspan="3" style="color:#9CA3AF">暂无选题池</td></tr>',
+        topic_dir=html.escape(TOPIC_DIR),
         now=now,
     )
 

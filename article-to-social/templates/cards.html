@@ -18,7 +18,7 @@
      | 内页页码    | .in-page  "01"        | .in-idx   "01/09" 连号 |
      | 封面右上角  | .cv-src   栏目词/日期  | .cv-idx   连号页码      |
      | 封面底部    | 无滑动提示            | .cv-swipe「左滑看完全部」|
-     | 末页底部    | 仅来源一行            | 来源 + .ask 互动引导   |
+     | 末页底部    | 仅来源一行            | 仅来源一行            |
      | 字号档位    | 基准                    | 大一号（--fs-* 变量）   |
 
      主题配色两平台**完全一致**（抖音不再另有一套配色）。
@@ -34,7 +34,7 @@
      3) 只改局部：<div class="card" style="--acc:#7C3AED">
 
    ⚠️ 不要改类名与 DOM 结构（render.cjs 依赖 .card 与 data-export；
-      build_cards.py 依赖 .in-page / .in-idx / .cv-src / .cv-idx / .cv-swipe / .ask）。
+      build_cards.py 依赖 .in-page / .in-idx / .cv-src / .cv-idx / .cv-swipe）。
    ========================================================================= */
   *{margin:0;padding:0;box-sizing:border-box}
   body{
@@ -77,6 +77,16 @@
     --data-gap:22px;            --data-mt:8px;      --data-pad:26px 24px;
     --warn-pad:24px 30px;       --warn-mb:44px;    --warn-bd-w:6px;
     --rank-row-pad:17px 0;
+    /* ranklist 尺寸档（2026-10-07 新增）：封面放 10 条榜单用 */
+    --fs-rl-nm:27px;    --fs-rl-dt:21px;     --fs-rl-inc:25px;
+    --fs-rl-inc-u:17px; --fs-rl-no:22px;     --fs-rl-no-top:26px; --fs-rl-no-dim:22px;
+    --rl-gap:11px;      --rl-gap-x:18px;     --rl-mb:24px;
+    --rl-row-pad:14px 20px;  --rl-radius:12px;  --rl-bd-w:5px;
+    --rl-no-w:46px;     --rl-no-h:46px;      --rl-no-r:10px;
+    --rl-dt-mt:5px;     --rl-dim-pad:12px 20px;
+    /* 封面榜单（compact）*/
+    --fs-cv-title-c:66px;  --fs-cv-title2-c:58px;  --fs-cv-desc-c:27px;
+    --cv-blocks-mt:22px;--rl-gap-compact:6px;--ls-cv-title-c:3px;--cv-title2-mt:8px;
     --brand-fs:25px;
   }
   [data-platform="douyin"]{
@@ -103,6 +113,17 @@
     --data-gap:24px;     --data-mt:10px;      --data-pad:28px 24px;
     --warn-pad:26px 32px; --warn-mb:46px;    --warn-bd-w:7px;
     --rank-row-pad:18px 0;
+    /* ranklist 抖音档：字更大、间距更松（同 --rank 的快滑逻辑） */
+    --fs-rl-nm:29px;    --fs-rl-dt:22px;     --fs-rl-inc:27px;
+    --fs-rl-inc-u:18px; --fs-rl-no:24px;     --fs-rl-no-top:28px; --fs-rl-no-dim:24px;
+    --rl-gap:10px;      --rl-gap-x:18px;     --rl-mb:22px;
+    --rl-row-pad:13px 20px;  --rl-radius:12px;  --rl-bd-w:6px;
+    --rl-no-w:48px;     --rl-no-h:48px;      --rl-no-r:10px;
+    --rl-dt-mt:5px;     --rl-dim-pad:11px 20px;
+    /* 封面榜单（compact）—— 抖音字更大，但 10 条要塞进一屏，仍比小红书紧 */
+    --fs-cv-title-c:70px;  --fs-cv-title2-c:62px;  --fs-cv-desc-c:28px;
+    --cv-blocks-mt:20px;--rl-gap-compact:5px;--ls-cv-title-c:4px;--cv-title2-mt:9px;
+    --in-sub-mb-dy:18px;
     --brand-fs:26px;
   }
 
@@ -220,6 +241,21 @@
   /* --- 警示框：跨主题统一用琥珀色，保证醒目（合规提示不跟主题变）--- */
   [data-theme],:root{--warn-bg:#FEF6E7;--warn-bd:#B45309;--warn-c:#7C4A0A}
 
+  /* --- ranklist 配色（2026-10-07 新增，封面榜单用）---
+   * 单独一块覆盖，不塞进各主题行里 —— 主题行是单行长串，插进去易破版。
+   * 1-5 名用主题主色（--acc），6-10 名一律灰化，跨主题都成立。 */
+  [data-theme],:root{
+    --rl-bg:transparent;        --rl-bd:transparent;
+    --rl-no-bg:transparent;     --rl-no-fg:var(--in-page);
+    --rl-nm:var(--txt);         --rl-dt:var(--in-sub);   --rl-inc:var(--in-page);
+    --rl-top-bg:var(--rank-me-bg); --rl-top-bd:var(--acc);
+    --rl-top-no-bg:var(--acc);  --rl-top-no-fg:#FFFFFF;
+    --rl-top-nm:var(--hl);      --rl-top-inc:var(--acc);
+    --rl-dim-bg:transparent;    --rl-dim-bd:var(--rank-bd);
+    --rl-dim-no-bd:var(--rank-bd); --rl-dim-no-fg:var(--in-page);
+    --rl-dim-nm:var(--in-page); --rl-dim-inc:var(--in-page);
+  }
+
   /* ===================== 封面（深色）===================== */
   .cover{
     background:var(--cv-bg);color:#FFFFFF;
@@ -254,6 +290,12 @@
   .cv-kicker{font-size:var(--fs-kicker);font-weight:700;color:var(--cv-kicker);letter-spacing:var(--ls-kicker);margin-bottom:var(--kicker-mb)}
   .cv-title{font-size:var(--fs-cv-title);font-weight:700;line-height:var(--lh-cv-title);letter-spacing:var(--ls-cv-title);color:var(--cv-title)}
   .cv-title2{font-size:var(--fs-cv-title);font-weight:700;line-height:var(--lh-cv-title);letter-spacing:var(--ls-cv-title);color:var(--cv-title2)}
+  /* 第三行大字（2026-10-09 新增）：白/紫/白 交替节奏。仅个别封面用到 title3 字段 */
+  .cv-title3{font-size:var(--fs-cv-title);font-weight:700;line-height:var(--lh-cv-title);letter-spacing:var(--ls-cv-title);color:var(--cv-title)}
+  /* 行内关键词换色（2026-10-09 新增）：一行里挑 1 个词换色，制造视觉焦点。
+     白色行（title/title3）的高亮取主题强调色；已经是强调色的 title2 行反而用白色。 */
+  .cv-hl{color:var(--cv-title2)}
+  .cv-title2 .cv-hl{color:var(--cv-title)}
   .cv-line{width:var(--line-w);height:var(--line-h);background:var(--cv-line);border-radius:5px;margin:var(--line-m)}
   .cv-desc{font-size:var(--fs-cv-desc);line-height:var(--lh-desc);color:var(--cv-desc);font-weight:400;letter-spacing:.5px}
   .cv-stats{display:flex;gap:var(--stat-gap);border-top:1px solid var(--cv-stat-bd);padding-top:var(--stat-pt)}
@@ -289,6 +331,9 @@
 
   .in-title{font-size:var(--fs-in-title);font-weight:700;line-height:var(--lh-in-title);letter-spacing:var(--ls-in-title);color:var(--in-title);margin-bottom:20px}
   .in-sub{font-size:var(--fs-in-sub);color:var(--in-sub);line-height:1.6;margin-bottom:52px}
+  /* 抖音端页内小字底部留白偏多（52px 恒定），三块式页面（data+items+sub）
+     在 1080高画布上会顶出 39px。给一个可收敛的变量。 */
+  [data-platform="douyin"] .in-sub{margin-bottom:var(--in-sub-mb-dy)}
   .in-rule{width:var(--in-rule-w);height:var(--rule-h);background:var(--in-rule);border-radius:4px;margin-bottom:var(--rule-mb)}
   .in-items{flex:1;display:flex;flex-direction:column;gap:var(--items-gap)}
 
@@ -322,7 +367,77 @@
   .rank-row.me .nm{font-weight:700;color:var(--hl)}
   .rank-row.me .sc{color:var(--acc)}
 
-  /* 末页底部：来源恒在；互动引导 .ask 仅抖音（评论权重高） */
+  /* --- 封面 blocks 段（2026-10-07 新增）---
+   * 原来 render_cover 根本不渲染 blocks → 写了 ranklist 也不会出现在封面上，
+   *而且因为没占位，标题区被挤到 WRAP。榜单类封面必须有一个专门的容器。*/
+  .cv-blocks{position:relative;z-index:2;margin-top:var(--cv-blocks-mt)}
+  /* 紧凑模式：榜单类封面（compact:true）—— 标题缩小、去掉副标题与描述，
+     把版面让给榜单。封面是深底，所以榜单配色整体反相。 */
+  .cover.compact .ranklist{gap:var(--rl-gap-compact)}
+  /* 榜单封面：标题下的分隔线与 desc 让位给榜单（10 行是硬约束） */
+  .cover.compact .cv-line{display:none}
+  .cover.compact .cv-desc{margin-top:0}
+  .cover.compact .cv-title{font-size:var(--fs-cv-title-c);letter-spacing:var(--ls-cv-title-c)}
+  .cover.compact .cv-title2{font-size:var(--fs-cv-title2-c);letter-spacing:var(--ls-cv-title-c);
+    margin-top:var(--cv-title2-mt)}
+  .cover.compact .cv-line{height:var(--line-h);width:var(--line-w);margin:var(--line-m)}
+  .cover.compact .cv-body{flex:0 0 auto}
+  .cover.compact .cv-desc{font-size:var(--fs-cv-desc-c)}
+  .cover.compact .ranklist{
+    --rl-bg:rgba(255,255,255,.05); --rl-bd:rgba(255,255,255,.16);
+    --rl-no-bg:rgba(255,255,255,.14);   --rl-no-fg:#FFFFFF;
+    --rl-nm:#F1F5F9;                    --rl-dt:#B6C2D4;      --rl-inc:#E2E8F0;
+    --rl-top-bg:rgba(56,132,255,.16);   --rl-top-bd:#4C9AFF;
+    --rl-top-no-bg:#2F80ED;             --rl-top-no-fg:#FFFFFF;
+    --rl-top-nm:#FFFFFF;                --rl-top-inc:#7FB8FF;
+    --rl-dim-bg:rgba(255,255,255,.03);     --rl-dim-bd:rgba(120,170,255,.3);
+    --rl-dim-no-bg:rgba(79,142,255,.55);  --rl-dim-no-fg:#E8F0FE;
+    --rl-dim-nm:#C3D0E2;                  --rl-dim-inc:#A9BBD2;
+  }
+
+  /* ranklist —— 榜单专用（2026-10-07 新增）
+   * 场景：封面页要一次放完 10 条，前 5 名重点标出、6-10 名弱化。
+   * rank 类型只有 nm/sc 两列，且 me 是「同行高亮」语义（一行），
+   * 装不下「10 条 + 前后两档强弱」→ 新开一种。
+   * 强弱分档用 .top（1-5，实心徽章 + 深色底）/ .dim（6-10，灰字 + 空心徽章）。*/
+  .ranklist{display:flex;flex-direction:column;gap:var(--rl-gap);margin-bottom:var(--rl-mb)}
+  .rl-row{display:flex;align-items:center;gap:var(--rl-gap-x);
+    padding:var(--rl-row-pad);border-radius:var(--rl-radius);
+    background:var(--rl-bg);border-left:var(--rl-bd-w) solid var(--rl-bd)}
+  .rl-no{font-family:"Consolas","Courier New",monospace;font-weight:700;
+    font-size:var(--fs-rl-no);line-height:1;flex:0 0 auto;
+    width:var(--rl-no-w);height:var(--rl-no-h);border-radius:var(--rl-no-r);
+    display:flex;align-items:center;justify-content:center;
+    background:var(--rl-no-bg);color:var(--rl-no-fg)}
+  .rl-nm{flex:1;font-size:var(--fs-rl-nm);color:var(--rl-nm);line-height:1.35;min-width:0}
+  /* 项目名与描述必须分行：.rl-nm 是 flex 子项，描述要 display:block 才会换行。
+     写成 inline 会和项目名挤在同一行、粘成一团（2026-10-07 实测踩过）。*/
+  .rl-dt{display:block;font-size:var(--fs-rl-dt);color:var(--rl-dt);
+    margin-top:var(--rl-dt-mt);line-height:1.4}
+  .rl-inc{font-family:"Consolas","Courier New",monospace;font-size:var(--fs-rl-inc);
+    font-weight:700;color:var(--rl-inc);flex:0 0 auto;white-space:nowrap}
+  .rl-inc i{font-style:normal;font-size:var(--fs-rl-inc-u);opacity:.75;margin-left:2px}
+
+  /* 1-5 名：实心徽章、深色底、亮色增量 —— 视觉重量在前 */
+  .rl-row.top{background:var(--rl-top-bg);border-left-color:var(--rl-top-bd)}
+  .rl-row.top .rl-no{background:var(--rl-top-no-bg);color:var(--rl-top-no-fg);font-size:var(--fs-rl-no-top)}
+  .rl-row.top .rl-nm{color:var(--rl-top-nm);font-weight:700}
+  .rl-row.top .rl-inc{color:var(--rl-top-inc)}
+
+  /* 6-10 名：弱化档。
+     2026-10-07 用户反馈「与 1-5 名区分太大」→ 改成渐变过渡：
+       · 徽章从「实心深蓝」渐变到「淡蓝」，不再用空心边框
+         （空心边框 rgba(255,255,255,.22) 叠上透明度后轮廓直接消失，实测只剩一条竖线）
+       · 字号差 26→23、padding 差 14→12，不再一步砍到 20/10
+       · 每行的整体透明度由 build_cards 按名次算出行内 opacity（0.85 → 0.6）*/
+  .rl-row.dim{background:var(--rl-dim-bg);border-left-color:var(--rl-dim-bd);padding-top:var(--rl-dim-pad);padding-bottom:var(--rl-dim-pad)}
+  .rl-row.dim .rl-no{background:var(--rl-dim-no-bg);color:var(--rl-dim-no-fg);
+    border:none;font-size:var(--fs-rl-no-dim)}
+  .rl-row.dim .rl-nm{color:var(--rl-dim-nm);font-weight:400}
+  .rl-row.dim .rl-dt{display:none}          /* 弱化档不显示描述，只留名字+增量 */
+  .rl-row.dim .rl-inc{color:var(--rl-dim-inc);font-weight:400}
+
+  /* 末页底部：只出一行来源（2026-10-08 起互动引导 .ask 已全部删除，两平台一致） */
   .in-foot{
     position:absolute;left:var(--foot-left);right:var(--foot-left);bottom:var(--foot-bottom);
     border-top:1px solid var(--rank-bd);padding-top:var(--foot-pt);
@@ -332,8 +447,6 @@
     display:flex;justify-content:space-between;align-items:baseline;gap:20px;
   }
   [data-platform="douyin"] .in-foot .src{flex:none}
-  [data-platform="douyin"] .in-foot .ask{font-size:var(--fs-foot);font-weight:600;color:var(--in-brand);text-align:right}
-  [data-platform="xhs"] .ask{display:none}
 </style>
 </head>
 <body>
@@ -413,7 +526,7 @@
   </div>
 </div>
 
-<!-- ============ 末页：来源（.ask 互动引导仅抖音渲染）============ -->
+<!-- ============ 末页：来源（只出一行来源，无互动引导）============ -->
 <div class="card inner" data-export="04-示例末页.png">
   <div class="in-head">
     <span class="in-brand">Gemini 4 Pro 实测 <em>| 冷静一下</em></span>
@@ -439,7 +552,6 @@
 
   <div class="in-foot">
     <span class="src">来源：36氪 · 新智元</span>
-    <span class="ask">你觉得这波能信几成？</span>
   </div>
 </div>
 
@@ -447,7 +559,7 @@
   抖音版差异演示（对照用，正常出图时 build_cards.py 会按 platform 自动派生这些字段）：
   封面：右上角 .cv-src 换成 <span class="cv-idx">01/09</span>，底部加 <div class="cv-swipe"><i>👉</i>左滑看完全部 9 张</div>
   内页：<span class="in-page">01</span> 换成 <span class="in-idx">02/09</span>
-  末页：.in-foot 自动变 flex 布局，.ask 参与显示
+  末页：只出一行来源，无互动引导（2026-10-08 起两平台一致）
   字号：由 [data-platform="douyin"] 的 --fs-* 变量整体上浮一档，无需改 DOM
 -->
 

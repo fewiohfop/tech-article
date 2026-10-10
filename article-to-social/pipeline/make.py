@@ -165,10 +165,13 @@ def main():
         if n and not args.quiet:
             print("  ↳ %s: 回写 %d 页 gap" % (spec, n))
 
+    # 2026-10-08：LOW 不再计入 bad。LOW 只说明这一页偏松（填充 < 56%），
+    # 不是缺陷，更不该触发「回去加内容」。只有真会翻车的三类才算失败。
     bad = sum(1 for j in data for r in j["rows"]
-              if r["verdict"] in ("LOW", "CROWD", "WRAP", "OVERFLOW"))
-    print("RESULT  bad=%d  gap_writeback=%d  shots=%d" %
-          (bad, total_gap_fix, sum(len(j["saved"]) for j in data)))
+              if r["verdict"] in ("CROWD", "WRAP", "OVERFLOW"))
+    low = sum(1 for j in data for r in j["rows"] if r["verdict"] == "LOW")
+    print("RESULT  bad=%d  low=%d(不阻断)  gap_writeback=%d  shots=%d" %
+          (bad, low, total_gap_fix, sum(len(j["saved"]) for j in data)))
 
     if args.tag:
         if not (XHS_DIR or DY_DIR):

@@ -36,7 +36,7 @@ spec.json 结构:
          {"k":"data","v":[["88%","标签"],["95.3%","标签"]]},
          {"k":"sub","v":"..."}
       ],
-      "foot":"来源：36氪 · 量子位", "ask":"你觉得这波能信几成？"
+      "foot":"来源：36氪 · 量子位"
     }
   ]
 }
@@ -58,7 +58,7 @@ TPL = {"_default": TEMPLATE}
 def autofill_platform(spec, platform):
     """
     一份内容出两个平台：平台专属的版式字段自动派生，已显式写明的值不覆盖。
-      抖音 —— 连号页码 idx、封面滑动提示 swipe、末页互动引导 ask
+      抖音 —— 连号页码 idx、封面滑动提示 swipe
       小红书 —— 内页页码 page
     """
     pages = spec.get("pages", [])
@@ -76,9 +76,7 @@ def autofill_platform(spec, platform):
             if platform == "xhs":
                 p.setdefault("page", "%02d" % inner)
     if platform == "douyin" and pages:
-        last = pages[-1]
-        if not last.get("ask") and spec.get("ask"):
-            last["ask"] = spec["ask"]
+        pass  # 2026-10-08：末页互动引导 ask 已停用，不再自动注入
 
 
 def esc(s):
@@ -90,9 +88,25 @@ def theme_attr(page, html_theme):
     return ' data-theme="%s"' % t if t else ""
 
 
+def _hl(text, word):
+    """把封面某一行里的**一个关键词**包成 .cv-hl 换色（2026-10-09 新增）。
+
+    用户口径：小红书/抖音爆款封面都会在标题里挑 1 个词换色做视觉焦点，
+    整行同色会让「重点不突出」。只换**第一个**匹配处，避免一行多个焦点。
+    词不在行里（写错/被改）→ 原样返回，不报错；调用方另有告警。"""
+    if not word or not text or word not in text:
+        return text
+    return text.replace(word, '<span class="cv-hl">%s</span>' % word, 1)
+
+
 def render_cover(p, platform, html_theme):
     parts = []
-    parts.append('<div class="card cover"%s data-export="%s">' % (theme_attr(p, html_theme), p["export"]))
+    # compact：榜单类封面用。标题缩小、留白收紧，把版面让给 blocks。
+    # 2026-10-07 新增 —— 原来封面既不渲染 blocks 也没有紧凑模式，
+    # 榜单放不进去，且标题被挤到 WRAP。
+    compact = ' compact' if p.get("compact") else ''
+    parts.append('<div class="card cover%s"%s data-export="%s">'
+                 % (compact, theme_attr(p, html_theme), p["export"]))
     parts.append('  <div class="cv-grid"></div>')
     parts.append('  <div class="cv-glow"></div>')
     parts.append('')
@@ -109,20 +123,49 @@ def render_cover(p, platform, html_theme):
     parts.append('')
     parts.append('  <div class="cv-body">')
     if p.get("kicker"):
-        parts.append('    <div class="cv-kicker">%s</div>' % p["kicker"])
+        # kicker 默认 38/40px + 8/9px 字距（.cv-kicker）。用户要求某条封面把这一行
+        # 「字小一点」时，用它自己的 kicker_fs / kicker_ls 覆盖（2026-10-09 新增）。
+        # ⚠️ 只在本页生效，不动 --fs-kicker 全局变量（避免影响别条封面）。
+        # ⚠️ 只给 kicker_ls 时不写 font-size，让两平台各自沿用档位字号；
+        #    写死字号会让抖音退回 38px，与平台档位脱钩。（2026-10-09 修正）
+        kfs, kls = p.get("kicker_fs"), p.get("kicker_ls")
+        if kfs or kls:
+            _st = []
+            if kfs:
+                _st.append("font-size:%dpx" % kfs)
+            _st.append("letter-spacing:%dpx"
+                       % (kls if kls is not None else max(2, round((kfs or 38) * 0.2))))
+            parts.append('    <div class="cv-kicker" style="%s">%s</div>'
+                         % (";".join(_st), p["kicker"]))
+        else:
+            parts.append('    <div class="cv-kicker">%s</div>' % p["kicker"])
     if p.get("title"):
         fs = p.get("title_fs")
         style = ' style="font-size:%dpx;letter-spacing:-1px"' % fs if fs else ""
-        parts.append('    <div class="cv-title"%s>%s</div>' % (style, p["title"]))
+        parts.append('    <div class="cv-title"%s>%s</div>'
+                     % (style, _hl(p["title"], p.get("title_hl"))))
     if p.get("title2"):
         fs2 = p.get("title2_fs")
         style2 = ' style="font-size:%dpx;letter-spacing:-1px"' % fs2 if fs2 else ""
-        parts.append('    <div class="cv-title2"%s>%s</div>' % (style2, p["title2"]))
+        parts.append('    <div class="cv-title2"%s>%s</div>'
+                     % (style2, _hl(p["title2"], p.get("title2_hl"))))
+    if p.get("title3"):
+        # 第三行大字（2026-10-09 新增）：白/紫/白 交替。仅个别封面用到。
+        fs3 = p.get("title3_fs")
+        style3 = ' style="font-size:%dpx;letter-spacing:-1px"' % fs3 if fs3 else ""
+        parts.append('    <div class="cv-title3"%s>%s</div>'
+                     % (style3, _hl(p["title3"], p.get("title3_hl"))))
     parts.append('    <div class="cv-line"></div>')
     if p.get("desc"):
         parts.append('    <div class="cv-desc">%s</div>' % p["desc"])
     parts.append('  </div>')
     parts.append('')
+    # 封面 blocks（2026-10-07 新增）。榜单类封面靠它放整份榜单。
+    if p.get("blocks"):
+        parts.append('  <div class="cv-blocks">')
+        parts.extend(render_blocks(p["blocks"], p.get("gap")).split("\n"))
+        parts.append('  </div>')
+        parts.append('')
     stats = p.get("stats") or []
     stat_html = []
     for v, lab in stats:
@@ -172,10 +215,41 @@ def render_blocks(blocks, gap):
                 out.append('      <div class="%s"><span class="nm">%s</span><span class="sc">%s</span></div>'
                            % (cls, row["nm"], row["sc"]))
             out.append('    </div>')
+        elif k == "ranklist":
+            # 封面榜单专用（2026-10-07 新增）。rank 只有 nm/sc 两列、me 是「同行高亮」，
+            # 装不下「一次放 10 条 + 前 5 强 / 后 5 弱」→ 单独一种。
+            #   r  名次 | n  项目名 | d  一句话（仅 top 档渲染）| inc  增量数字
+            #   top: 1-5 实心徽章高亮；6-10 空心徽章弱化（CSS 里 .dim 隐去 d）
+            # 2026-10-07 用户反馈「6-10 与 1-5 区分太大」→ dim 档按名次逐级降透明度，
+            # 做渐变过渡而不是一刀切下去。名称只写仓库名（不含 owner），owner 放末页/正文。
+            out.append('    <div class="ranklist">')
+            dim_rows = [r for r in b["v"] if not r.get("top")]
+            for row in b["v"]:
+                cls = "rl-row top" if row.get("top") else "rl-row dim"
+                dt = ('<span class="rl-dt">%s</span>' % row["d"]) if row.get("d") else ""
+                style = ""
+                if not row.get("top") and dim_rows:
+                    # 渐变过渡：第 6 名 0.85 → 每往后一名降 0.05，最末不低于 0.6。
+                    # 下限不能低于 0.6 —— dim 档是空心徽章，边框本身很淡，
+                    # 透明度再低徽章轮廓就整个消失（第 10 名实测只剩一条竖线）。
+                    idx = dim_rows.index(row)
+                    op = max(0.6, round(0.85 - idx * 0.05, 3))
+                    style = ' style="opacity:%s"' % op
+                out.append('      <div class="%s"%s>'
+                           '<span class="rl-no">%s</span>'
+                           '<span class="rl-nm">%s%s</span>'
+                           '<span class="rl-inc">%s<i>stars</i></span>'
+                           '</div>'
+                           % (cls, style, row["r"], row["n"], dt, row.get("inc", "")))
+            out.append('    </div>')
         elif k == "raw":
             out.append(b["v"])
+        elif k == "sub":
+            # 页内小字补充说明。模板有 .in-sub 样式，SKILL.md 也写了，
+            # 但2026-10-07 实测前build_cards 漏了这个分支 → ValueError 直接失败。
+            out.append('    <div class="in-sub">%s</div>' % b["v"])
         else:
-            raise ValueError("未知 block 类型: %s" % k)
+            raise ValueError("未知 block 类型: %s（支持: warn/items/points/data/rank/ranklist/raw/sub）" % k)
     out.append('  </div>')
     return "\n".join(out)
 
@@ -202,16 +276,15 @@ def render_inner(p, platform, html_theme):
     if p.get("sub"):
         out.append('  <div class="in-sub">%s</div>' % p["sub"])
     out.append(render_blocks(p.get("blocks") or [], p.get("gap")))
-    if p.get("foot") or p.get("ask"):
+    if p.get("foot"):
         if platform == "xhs":
-            if p.get("foot"):
-                out.append('  <div class="in-foot">%s</div>' % p["foot"])
+            out.append('  <div class="in-foot">%s</div>' % p["foot"])
         else:
+            # 2026-10-08：抖音末页也只出「来源」一行。原 .ask 互动引导
+            # （「你觉得这波能信几成？」这类）已按用户要求全部删除 ——
+            # 属于引导评论的话术，正常陈述内容即可。
             out.append('  <div class="in-foot">')
-            out.append('    <span class="src">%s</span>' % p.get("foot", ""))
-            # ask 为空时不输出空 span（抖音末页互动引导是可选字段）
-            if p.get("ask"):
-                out.append('    <span class="ask">%s</span>' % p["ask"])
+            out.append('    <span class="src">%s</span>' % p["foot"])
             out.append('  </div>')
     out.append('</div>')
     return "\n".join(out)
@@ -250,6 +323,16 @@ def main():
             chunks.append(render_cover(p, platform, ht))
         else:
             chunks.append(render_inner(p, platform, ht))
+
+    # 封面行内高亮词自检：词不在对应行文本里 = 写了等于没写（静默失效，最难查）
+    for p in spec["pages"]:
+        if p.get("type") != "cover":
+            continue
+        for base in ("title", "title2", "title3", "kicker"):
+            w = p.get(base + "_hl")
+            if w and w not in (p.get(base) or ""):
+                print("WARN  封面 %s 的 %s_hl=「%s」不在该行文本里，高亮不会生效"
+                      % (p.get("export", "?"), base, w))
 
     out_html = head + "<body>\n\n" + "\n\n".join(chunks) + "\n\n</body>\n</html>\n"
     open(args.out, "w", encoding="utf-8").write(out_html)

@@ -184,10 +184,17 @@ def render_sources(items):
     return "".join(li)
 
 
-def render_steps(steps):
+def render_steps(steps, plat="小红书"):
+    """发布步骤。⚠️ 默认文案必须按平台分叉（2026-10-09 修）：
+    旧版把「打开小红书创作服务平台」写死，抖音版 HTML 套同一模板 →
+    交付出去的「抖音_xxx.html」打开全是小红书字样（用户实测发现）。
+    """
     if not steps:
+        first = ("打开抖音创作者中心（电脑端）或 App 发布页"
+                 if plat == "抖音" else
+                 "打开小红书创作服务平台（电脑端）或 App 创作页")
         steps = [
-            "打开小红书创作服务平台（电脑端）或 App 创作页",
+            first,
             "按 01 → 最后一张 的顺序上传全部图片",
             "粘贴标题与正文，补齐标签",
             "用官方「定时发布」设定时间",
@@ -196,8 +203,9 @@ def render_steps(steps):
     return "".join("<li>%s</li>" % esc(s) for s in steps)
 
 
-def build(cards, meta):
-    topic = meta.get("topic", "小红书图文笔记")
+def build(cards, meta, platform="xhs"):
+    plat = "抖音" if platform == "dy" else "小红书"
+    topic = meta.get("topic", plat + "图文笔记")
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     cards_html = "".join(
         '<figure class="shot"><img src="%s" alt="%s" loading="lazy">'
@@ -225,6 +233,7 @@ def build(cards, meta):
 
     tpl = TEMPLATE
     repl = {
+        "%%PLAT%%": plat,
         "%%TOPIC%%": esc(topic),
         "%%METABAR%%": meta_bar,
         "%%TITLES%%": render_titles(meta.get("titles")),
@@ -234,7 +243,7 @@ def build(cards, meta):
         "%%CARDS%%": cards_html,
         "%%VERIFY%%": render_verify(meta.get("verify")),
         "%%SOURCES%%": render_sources(meta.get("sources")),
-        "%%STEPS%%": render_steps(meta.get("steps")),
+        "%%STEPS%%": render_steps(meta.get("steps"), plat),
         "%%NOW%%": now,
     }
     for k, v in repl.items():
@@ -247,7 +256,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>%%TOPIC%% · 小红书图文成品</title>
+<title>%%TOPIC%% · %%PLAT%%图文成品</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{
@@ -349,7 +358,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <div class="wrap">
 
   <header class="top">
-    <div class="eyebrow">小红书图文成品</div>
+    <div class="eyebrow">%%PLAT%%图文成品</div>
     <h1>%%TOPIC%%</h1>
     %%METABAR%%
   </header>
@@ -447,6 +456,10 @@ def main():
     ap.add_argument("--cards", required=True, help="卡片 PNG 所在目录")
     ap.add_argument("--out", required=True, help="输出的单文件 HTML 路径")
     ap.add_argument("--meta", help="meta.json 路径")
+    # 2026-10-09 加：没有这个参数时两份 HTML 都会写「小红书」，
+    # 抖音交付物打开全是小红书字样。默认 xhs 保持向后兼容。
+    ap.add_argument("--platform", default="xhs", choices=["xhs", "dy"],
+                    help="平台：xhs=小红书（默认）/ dy=抖音")
     args = ap.parse_args()
 
     if not os.path.isdir(args.cards):
@@ -466,7 +479,7 @@ def main():
         print("ERR 目录里没有图片: " + args.cards)
         sys.exit(1)
 
-    html = build(cards, meta)
+    html = build(cards, meta, args.platform)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(html)
 
