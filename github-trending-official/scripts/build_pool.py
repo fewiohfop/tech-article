@@ -18,7 +18,7 @@
   _pool_desc.json    ← 本脚本需要的文案与清单（见 references/pool-data.sample.json）
 
 用法：
-  python build_pool.py --work <工作目录> --out "<小红书选题目录>" --out "<抖音选题目录>"
+  python build_pool.py --work <工作目录> --out "C:\选题"
   python build_pool.py --work <目录> --out <目录> --date 2026-09-30
   （--out 可给多个，两平台各一个；目录不存在会直接报错，需先创建）
 

@@ -26,7 +26,15 @@ import urllib.request
 
 
 def _clear_stale_proxy():
-    """清掉换VPN 节点后残留的失效代理端口，避免 502。需保留时设 PROXY_PASSTHROUGH=1。"""
+    """清掉换VPN 节点后残留的失效代理端口，避免 502。需保留时设 PROXY_PASSTHROUGH=1。
+
+    ⚠️ 2026-10-07 修：光清环境变量是不够的，而且更糟。
+    Windows 上 `urllib.request.getproxies()` 会**接着去读注册表里的系统代理**——
+    清掉 HTTP_PROXY 之后，它读到的是注册表里的 127.0.0.1:10808（已失效），
+    于是 api.github.com 全部 SSL EOF / 403。
+    对策：把全局 opener 显式钉成 `ProxyHandler({})`（强制直连），
+    除非 PROXY_PASSTHROUGH=1 时才让 urllib 走它自己的探测结果。
+    """
     if os.environ.get("PROXY_PASSTHROUGH") == "1":
         return
     hit = []
@@ -35,13 +43,28 @@ def _clear_stale_proxy():
             hit.append("%s=%s" % (k, os.environ[k]))
             os.environ.pop(k, None)
     if hit:
-        print("[INFO] 已清空失效代理环境变量：%s" % ", ".join(hit), file=sys.stderr)
+        print("[INFO] 已清空代理环境变量：%s" % ", ".join(hit), file=sys.stderr)
+    # 关键：钉死 opener，避免回落到注册表里的死代理
+    urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
 
 
 _clear_stale_proxy()
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+
+
+def _probe_rate_limit(timeout=10):
+    """查 api.github.com 配额剩余量。取不到返回 None（不据此下结论）。"""
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/rate_limit",
+            headers={"User-Agent": UA, "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            d = json.loads(resp.read().decode("utf-8"))
+        return d.get("resources", {}).get("core", {}).get("remaining")
+    except Exception:
+        return None
 
 
 def fetch_one(repo, timeout=25):
@@ -92,7 +115,17 @@ def main():
             out[r] = {"error": "HTTP %s" % e.code}
             print("[%2d/%d] HTTP %s  %s" % (i, len(uniq), e.code, r))
             if e.code == 403:
-                print("!! 403 配额用尽（未授权 60 次/小时），停止后续请求")
+                # 2026-10-07：403 有两种成因，不能一律当「配额用尽」——
+                #   ① 真配额耗尽（未授权 60/小时）
+                #   ② 被网关/代理限流（body 里没有 rate limit 提示）
+                # 原来无条件 break，遇到 ② 时会「0/N 全军覆没」且看不出真因。
+                # 现在先自查 /rate_limit：remaining>0 → 是 ②，跳过这条继续跑。
+                remaining = _probe_rate_limit()
+                if remaining is not None and remaining > 0:
+                    print("    ↳ 配额仍有 %d 次 → 判定为网关限流（非配额），跳过本条继续"
+                          % remaining)
+                    continue
+                print("!! 403 且配额已耗尽（未授权 60次/小时），停止后续请求")
                 break
         except Exception as e:
             out[r] = {"error": str(e)[:80]}
