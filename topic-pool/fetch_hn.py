@@ -56,6 +56,9 @@ def main():
             'score': d.get('score', 0),
             'descendants': d.get('descendants', 0),
             'hn_id': sid,
+            # 2026-10-12 新增：HN 详情自带发布时刻（Unix 秒，UTC）。
+            # 原实现丢了这个字段，导致选题池完全无法判断「这条多久了」。
+            'time': d.get('time', 0),
         })
         print(f'[{d.get("score",0):5d}分 {d.get("descendants",0):4d}评] {d.get("title","")[:80]}')
     p = os.path.join(HERE, 'hn_items.json')

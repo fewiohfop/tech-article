@@ -3,7 +3,7 @@
 #
 # 用法：bash C:/srtwb/pool/run_daily.sh [YYYY-MM-DD]
 #
-# 步骤：抓 tophub 17 节点 → 抓海外/直连源 → 解析 → 合并排序 → 出 HTML
+# 步骤：抓 tophub 17 节点 → 抓海外/直连源 → 解析 → 抓发布时间 → 合并排序出 HTML
 set -u
 cd "$(dirname "$0")"
 PY="C:/Users/无妄/.workbuddy/binaries/python/versions/3.13.12/python.exe"
@@ -32,5 +32,10 @@ echo "=== [3/5] 解析 tophub + GitHub ==="
 "$PY" parse_tophub.py | tail -3
 "$PY" parse_github.py | tail -2
 
-echo "=== [4/5] 生成选题池 ==="
+echo "=== [4/5] 抓发布时间（依赖上一步的 tophub_items/hn_items）==="
+# 给池内每条外链取发布时间，供 make_pool 判「必抓 7 天窗」并给条目打时间标签。
+# 有缓存（_pubtime_cache.json），只有新 URL 会真抓；缺网时静默降级，页面标「时间未取到」。
+"$PY" fetch_pubtime.py 2>&1 | tail -25
+
+echo "=== [5/5] 生成选题池 ==="
 "$PY" make_pool.py "$DATE"

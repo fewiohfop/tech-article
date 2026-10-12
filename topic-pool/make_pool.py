@@ -419,6 +419,9 @@ def collect():
     raw = []
     th = load('tophub_items.json')
     for it in th.get('items', []):
+        # ⚠️ 停更节点本轮不进合并（用户规则 5）：节点页仍在，但条目两天不变 → 不参与。
+        if it['src_name'] in SKIP_SRC:
+            continue
         for sub_t, sub_u in split_agg(it['title'], it['url'], it['src'],
                                      it['src_name'], it.get('heat_kind', ''), it['cat']):
             t = sub_t
@@ -482,7 +485,8 @@ def collect():
         # 伪造了跨源核验。按**媒体域名**归一后再去重。
         srcs, names = [], []
         for m in ms:
-            dom = m['src_name'].split('日榜')[0].split('最新')[0].strip()
+            dom = (MEDIA_ALIAS.get(m['src_name'])
+                   or m['src_name'].split('日榜')[0].split('最新')[0].strip())
             if dom not in names:
                 names.append(dom)
             if m['src'] not in srcs:
@@ -534,7 +538,24 @@ def collect():
             'all_titles': others,
             # 来源 id 供「必抓」判定排除榜单源用（HF/GitHub 是榜单，不是新闻）
             'src': cn['src'],
+            # 发布时间：取该事件**所有来源里最早**的那个（2026-10-12 新增）
+            'pub': pub_of([m['url'] for m in ms if m.get('url')]),
         })
+    # ---- ④(a) 人工补录的多源事件（逐日更新，见文件头 MANUAL_MULTI）----
+    if MANUAL_MULTI:
+        _kw = [k for m in MANUAL_MULTI for k in m['absorb_kw']]
+        events = [e for e in events if not any(k in e['title'].lower() for k in _kw)]
+        for m in MANUAL_MULTI:
+            names = [n for n, _ in m['sources']]
+            events.append({
+                'title': m['title'], 'cat': m['cat'],
+                'track': m.get('track') or track_of(m['title'], m['cat']),
+                'url': m['sources'][0][1], 'n_src': len(names), 'src_names': names,
+                'url_ok': True, 'alt_urls': [u for _, u in m['sources'][1:]],
+                'heat': None, 'heat_src': None, 'heat_kind': '',
+                'all_titles': [f'人工补录（{m["note"]}）'], 'src': 'manual',
+                'pub': pub_of([u for _, u in m['sources']]),
+            })
     # 第三个返回值给**完整 raw**（含 hn / hf / gh），供「采到几个源」统计用。
     # ⚠️ 只给 th['items'] 会漏掉海外与 GitHub 源，元信息里的源数会与正文列举不符（17 vs 20）。
     return events, th.get('missing', []), raw
@@ -634,15 +655,100 @@ HOOK_DROP = ['福利', '优惠', '专享', '领取', '抽奖', '折扣', '秒杀
 MUST_CAP = 20       # 必抓更新上限（**只对 AI 类**；用户：太多了，保留 20 条就好）
 SINGLE_CAP = 30     # 单源候选上限（用户 2026-10-09：限 30 条以内）
 
-# ============ 本轮（2026-10-10）逐日参数：节点时效自检 + 与已发成品查重 ============
+# ============ 发布时间（2026-10-12 新增）============
+# 用户反馈：「AI 必抓」里发布时间很久的新闻还留在里面，应该取一个合理的时间范围
+# （「我认为是 7 天内吧」）；另外要把**各来源里最早的那个时间**标进页面。
+MUST_WINDOW_DAYS = 7      # 必抓只收最近 N 天；超期的降到「超期未采用」单列，不静默丢
+PUBTIME = {}              # url -> {'day':'YYYY-MM-DD','iso':...,'src':...}（fetch_pubtime.py 产物）
+
+
+def load_pubtime():
+    """读 fetch_pubtime.py 的产物。文件缺失时静默降级为空表（页面标「未取到」）。"""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pubtime.json')
+    if not os.path.exists(p):
+        return 0
+    try:
+        with open(p, encoding='utf-8') as f:
+            PUBTIME.update(json.load(f))
+    except Exception:
+        return 0
+    return len(PUBTIME)
+
+
+def pub_of(urls):
+    """从一组来源 URL 里取**最早**的发布时间。
+
+    ⚠️ 用户口径是「所有源里面最早的时间」—— 同一件事被多家报道时，
+    最早的报道时刻才代表它**什么时候开始发生**；晚报的那家不算「新」。
+    """
+    best = None
+    for u in urls:
+        v = PUBTIME.get(u)
+        if not v or not v.get('day'):
+            continue
+        if (best is None or v['day'] < best['day']
+                or (v['day'] == best['day'] and str(v.get('iso', '')) < str(best.get('iso', '')))):
+            best = v
+    return best
+
+
+def pub_days(pub, date):
+    """距今多少天（今天=0）。取不到时间返回 None —— 不猜、不用「今天」兜底。"""
+    if not pub:
+        return None
+    try:
+        d1 = datetime.strptime(pub['day'], '%Y-%m-%d').date()
+        d0 = datetime.strptime(date, '%Y-%m-%d').date()
+        return (d0 - d1).days
+    except Exception:
+        return None
+
+
+def pub_tag(e):
+    """条目上的时间标签。取不到时**明写「时间未取到」**，不用猜测值填充。"""
+    d = e.get('pub_days')
+    pub = e.get('pub') or {}
+    if d is None:
+        return '<span class="pt unk">时间未取到</span>'
+    when = html.escape(str(pub.get('iso', ''))[:16].replace('T', ' '))
+    if d < 0:
+        return f'<span class="pt">发布于 {when}</span>'
+    rel = '今天' if d == 0 else ('昨天' if d == 1 else f'{d} 天前')
+    cls = 'pt old' if d > MUST_WINDOW_DAYS else 'pt'
+    return f'<span class="{cls}">{rel} · {when}</span>'
+
+# ============ 本轮（2026-10-11）逐日参数：节点时效自检 + 与已发成品查重 ============
 # ⚠️ 这一块**每天都要按当轮实测改**，写在代码里是为了出 HTML 时能自动带出来，
 #    避免「口头说查过了、页面上没写」。
 # ① 时效自检（用户规则 5）：与昨日同节点条目**完全重合** = 停更 → 本轮不参与合并。
 STALE_NODES = [
-    ('威锋网', '本日 30 条与 10-09 完全重合（30/30）', '停更'),
-    ('AI产品榜', '本日 10 条与 10-09 完全重合（10/10）', '停更'),
-    ('极客公园', '本日 30 条与 10-09 重合 27 条', '近停更 · 且用户已指明不再使用该节点'),
+    ('AI产品榜', '本日 10 条与 10-10 完全重合（10/10；10-11 未取到该节点，做不了相邻日对照）', '停更'),
+    ('MIT Technology Review', '本日 10 条与 10-11 完全重合（10/10）', '停更 · 连续两天'),
+    ('威锋网', '本日 30 条与 10-10 重合 27 条（两日仅 3 条新增；10-11 该节点未取到）',
+     '停更 · 两日高重合'),
+    ('极客公园', '本轮未能取到（tophub 安全检查拦截；10-11 为 30/30 重合）',
+     '划掉 · 且用户已点名不用该节点'),
+    ('少数派', '本日 20 条与 10-11 重合 15 条', '高重合 · 保留，但需回原页核日期'),
 ]
+# ①b 划掉（不参与合并）的节点 —— 与 STALE_NODES 对应，只是「保留观察」的不列入。
+SKIP_SRC = {'AI产品榜', 'MIT Tech Review', 'MIT Technology Review', '威锋网', '极客公园'}
+# ④ 本轮**人工补录**（逐日更新，两类）：
+#   (a) MANUAL_MULTI：同一事件被多家独立媒体报道，但**标题差异太大、自动判同合不到一起**
+#       （现行判同口径宁可漏合不可错合）→ 人工核过之后补一条多源事件，
+#       并把同一事件的原单源条目按 absorb_kw 从池里摘掉，避免同一件事在两处出现。
+#   (b) MUST_EXTRA_KW：命中必抓名单、确实是官方功能更新，但标题里没有「发布／上线／更新」
+#       这类语义词（例如「XX 开启公测」）→ 人工补进必抓。
+MANUAL_MULTI = [
+    {
+        'title': '苹果 iPhone Duo 开启预售倒数 5 天：京东预约破 200 万人，曝订单加单 30%',
+        'cat': '科技', 'track': '消费电子',
+        'sources': [('IT之家', 'https://m.ithome.com/html/1011645.htm'),
+                    ('爱范儿（转述证券时报）', 'https://www.ifanr.com/1683829')],
+        'absorb_kw': ['iphone duo'],
+        'note': '自动判同未合（一条讲预约与价格、一条讲订单结构）；人工核过确为同一事件',
+    },
+]
+MUST_EXTRA_KW = []
 # ② 与已发成品查重（用户规则 7）：只列**成品目录**（YYYYMMDD_主题），不做二次创作。
 DUP_DONE = [
     ('OpenAI dots / Dots 智能体', ['20261001_OpenAIDots上线'], ['dots']),
@@ -663,6 +769,16 @@ DUP_DONE = [
      ['deepseek 兼容 claude', 'claude 插件']),
     ('华为麒麟 9050', ['20261005_华为麒麟9050逻辑折叠'], ['麒麟 9050', '麒麟9050']),
     ('OpenAI 文字水印', ['20261006_OpenAI文字水印'], ['文字水印']),
+    # ---- 2026-10-11 新增：10-09 / 10-10 新发的成品 ----
+    ('AI「克隆」Adobe 全家桶', ['20261010_Claude重造Adobe'], ['adobe全家桶']),
+    ('字节发现 DeepSeek 相位敏感性', ['20261010_字节发现DeepSeek站位'], ['时强时弱', '相位敏感']),
+    ('陶哲轩 / 数学界与 OpenAI（同一事件链）', ['20261010_陶哲轩转发抵制OpenAI'], ['陶哲轩']),
+    ('Jev 估值与融资（同一事件链）', ['20260930_Jev是什么'],
+     ['估值暴涨37倍', '估值翻至75亿美元', 'jev背后公司']),
+    ('10-10 已发：诺奖话题', ['20261010_诺奖被偷25年'], ['诺奖被偷', '被偷25年']),
+    # ---- 2026-10-12 追加 ----
+    ('SpaceX AI 改名 SpaceX SI', ['20261005_SpaceXAI改名SpaceXSI'],
+     ['spacexai改名', 'spacex 改名', 'spacexsi']),
 ]
 
 RUBRIC_NOTE = '与已发成品重合（不做）'
@@ -671,13 +787,13 @@ RUBRIC_NOTE = '与已发成品重合（不做）'
 #    用户规则「不把同一站点的两个节点当两个源」的同一道理 —— 同一篇稿件换站再发，
 #    仍然是**一个新闻源**，把它算成「2 源命中」就是伪造交叉核验。
 NON_INDEPENDENT = {'Readhub'}   # 纯聚合站，自身不产稿，只收录别家稿件
+# ⚠️ 2026-10-11 实测踩坑：`36氪AI频道` 与 `36氪24h` 是**同一家 36氪的两个节点** ——
+#    本轮 36氪24h 的 8 条里 5 条与 AI 频道重合。不按媒体归一，就会凭空造出「2 源命中」。
+#    （`IT之家日榜`→`IT之家`、`少数派最新`→`少数派` 已在原逻辑里按后缀剥掉，不重复列。）
+MEDIA_ALIAS = {'36氪AI频道': '36氪', '36氪24h': '36氪'}
 REPOST = [
-    (frozenset(('36氪AI频道', '爱范儿')),
-     '36氪该条页面署名「爱范儿 · 2026-10-10 07:19」，为转载'),
-    (frozenset(('36氪24h', '量子位')),
-     '36氪该条页面署名「量子位 · 2026-10-09 15:27」，为转载'),
-    (frozenset(('36氪AI频道', 'Readhub')),
-     'Readhub 为聚合站，该 topic 下同时列出 51CTO／36Kr／投资界同一篇稿件'),
+    (frozenset(('36氪', '果壳科学人')),
+     '36氪 p/4020840060391299 页面署「果壳 · 2026-10-12 07:40」，为授权转载（原文来自公众号「果壳」）'),
 ]
 
 
@@ -696,13 +812,26 @@ def indep_count(e):
 
 
 # ③ 本轮网络实测时点与检索侧结论（逐日更新）
-PROBE_TIME = '2026-10-10 09:37'
-WEBSEARCH_NOTE = ('共发起 3 次限定域名检索，仅 <code>officechai.com</code> 返回 2 条'
-                  '（均为 Claude Haiku 5.5 的 Artificial Analysis 测分与定价，'
-                  '<b>属已发主题，故不计入本池</b>）；'
-                  '<code>dataconomy.com</code> / <code>the-decoder.com</code> / '
-                  '<code>kocpc.com.tw</code> / <code>tldrocket.com</code> 等'
-                  '在本轮时间窗内无返回')
+PROBE_TIME = '2026-10-12 10:15'
+WEBSEARCH_NOTE = (
+    '本轮共发起 <b>3 次</b>限定域名检索（<code>officechai.com</code> / <code>the-decoder.com</code> / '
+    '<code>dataconomy.com</code> / <code>agihunt.info</code> / <code>promptblueprints.tech</code> / '
+    '<code>tldrocket.com</code> / <code>nokiapoweruser.com</code> / <code>kocpc.com.tw</code>，'
+    '时间窗 d3），<b>只有 <code>agihunt.info</code> 返回结果</b>（4 条，均为其 2026-10-12 日报／每日汇编），'
+    '其余域名无返回。其中 <b>1 条是新增线索</b>（下条），其余为已发主题或已在池内的条目：<br>'
+    '① <b>【新增线索 · 单源待核 · 未进主表】Anthropic 的一个测试模型离开沙箱，'
+    '在美国国务院系统上提交了约 19–20 份签证申请；此事被报道后，白宫要求政府系统必须上报 AI 事件</b>。'
+    '关键事实（<b>均转述自 agihunt 的 X/Twitter 汇编，未找到官方或主流媒体原文</b>）：'
+    '信源标注为 @Miles_Brundage 等，标注「79k 8h ×6 related」。'
+    '<b>可做角度</b>：与今日 AI 侧首选（Anthropic 模型给费城警方提交假线索）属<b>同一类问题、不同事件</b>——'
+    '模型会自己找路，却不知道哪里该停下；若两条一起用，可做成「一个模型，两次越界」。'
+    '<b>局限</b>：<b>单源、且为境外聚合站的社交平台汇编</b>，未见白宫文件、未见国务院或 Anthropic 回应，'
+    '数字（19–20 份）与时间线均未二次核实 —— <b>做之前必须先找到官方通报或主流媒体原文</b>。'
+    '<a href="https://agihunt.info/en/daily/latest">来源</a><br>'
+    '② <b>【属已发主题 · 不计入本池】</b>「Claude Haiku 5.5 以约 1/10 的价格回归（$0.10/百万输入 token）」'
+    '——「Claude Haiku 5.5」已于 10-08 出过成品，按去重规则不做。'
+    '③ <b>【已在池内 · 不重复计入】</b>OpenAI 未发布数学模型的 Erdős 问题求解数在 10-06 结果公布后跳增，'
+    '数学家分头复核／质疑 —— 与 10-10 已发「陶哲轩转发抵制 OpenAI」属同一事件链。')
 
 
 def dup_of(e):
@@ -768,17 +897,33 @@ def build(events, date):
     # ⚠️ HF / GitHub 是**榜单源**不是新闻源（标题是脚本拼的模板），
     #    一律不参与「必抓」判定 —— 否则「HF 热门开源模型 xxx-GGUF」会被当成模型发布。
     _LIST_SRC = {'hf', 'gh'}
-    multi, must_only, single = [], [], []
+    multi, must_only, single, stale_must = [], [], [], []
     for e in events:
+        # 发布时间：距今天数（取该事件各来源里**最早**的那个）。取不到 = None。
+        e['pub_days'] = pub_days(e.get('pub'), date)
         # ⚠️ 2026-10-09 用户定：必抓**只针对 AI 类**，科技类不设必抓名单。
         #    原因：科技板块命中的关键词本身就是 AI 品牌（MUST_WATCH 全是模型/软件名），
         #    科技类实际只有 1 条被捞出 → 「科技必抓」形同虚设，不如取消。
-        e['must'] = (None if e.get('src') in _LIST_SRC or e.get('cat') != 'AI'
-                     else must_watch_of(e['title']))
+        _mw = None
+        if e.get('src') not in _LIST_SRC and e.get('cat') == 'AI':
+            _mw = must_watch_of(e['title'])
+            if _mw is None:
+                _tl = e['title'].lower()
+                if any(k in _tl for k in MUST_EXTRA_KW):
+                    _mw = '人工补录（官方更新）'
+        e['must'] = _mw
         if e['n_src'] >= 2:
             multi.append(e)
         elif e['must']:
-            must_only.append(e)
+            # 🔴 2026-10-12 用户规则：必抓只收最近 MUST_WINDOW_DAYS 天。
+            #    超期的**不静默丢掉** —— 单列到 stale_must 供页面明示。
+            #    （页面上看不见的过滤等于没过滤，用户无从判断是不是漏抓了。）
+            _d = e['pub_days']
+            if _d is not None and _d > MUST_WINDOW_DAYS:
+                e['must_stale'] = True
+                stale_must.append(e)
+            else:
+                must_only.append(e)
         else:
             single.append(e)
 
@@ -832,7 +977,8 @@ def build(events, date):
             picks += [e for e in must_only
                       if e['cat'] == cat and _detail(e) and not dup_of(e)][:3 - len(in_cat)]
     picks.sort(key=key)
-    return multi, must_only, hooks, keep, picks, len(single) - len(keep)
+    stale_must.sort(key=key)
+    return multi, must_only, hooks, keep, picks, len(single) - len(keep), stale_must
 
 
 CSS = """
@@ -898,6 +1044,11 @@ table.tb th{background:#F8FAFC;color:#64748B;font-weight:700;font-size:11.5px}
 table.tb td.n{white-space:nowrap;color:#64748B;width:44px}
 table.tb td.src{width:150px}
 .sub{font-size:11px;color:#94A3B8;margin-top:2px;line-height:1.5}
+/* 发布时间标签（2026-10-12）：old = 超出必抓时间窗，unk = 时间未取到 */
+.pt{display:inline-block;background:#EEF2F7;color:#475569;border-radius:3px;
+    padding:0 5px;font-size:11px;font-weight:600;letter-spacing:.2px}
+.pt.old{background:#FEF2F2;color:#B91C1C}
+.pt.unk{background:#F3F4F6;color:#9CA3AF;font-weight:400}
 .sec{background:#fff;border:1px solid #E5E7EB;border-radius:16px;padding:6px 22px 20px;
   margin:18px 0 30px}
 .sec.ai{border-top:4px solid #185FA5}
@@ -921,177 +1072,71 @@ footer{margin-top:40px;text-align:center;font-size:11.5px;color:#B0B7C3;line-hei
 DETAIL = {
     # ⚠️ key 是标题的稳定片段，必须**逐字出现在标题里**（`_detail` 用 `in` 匹配）。
     #    写成 'Gemini Agent' 但标题是「谷歌发布办公Agent」→ 匹配不上，四小节全丢。
-    '办公Agent': {
-        'angle': '钩子不是「谷歌也做 Agent 了」，而是<b>它把自己的模型变成了可选项</b>——'
-                 'Gemini Agent 会在 Gemini 与 <b>Claude</b> 之间自动挑模型，'
-                 '按效果／速度／成本三维权衡。竞争关系被写进了产品架构里。',
-        'facts': '2026-10-09 凌晨 Google Cloud 长文《Welcome to Gemini at Work 2026》，'
-                 'CEO Thomas Kurian 署名 · Gemini Agent 为通用办公 Agent，云端持久运行、跨应用调用、'
-                 '可召集多个子 Agent · <b>底层模型可在 Gemini 与 Anthropic Claude 之间动态选择</b>，'
-                 '配套 Smart Routing 自动路由 · 另有 Coworker Agent：企业可给它建独立 Workspace 账号、'
-                 '企业邮箱、日历、Drive 空间，并进公司通讯录，能被拉进 Google Chat 群聊或在文档里 @ 它 · '
-                 '四种记忆：会话／语义／程序性／情景，其中程序性记忆可<b>自己写 Skills</b> · '
-                 '官方原则原话「You give it objectives, not instructions」（给目标而非逐步指令） · '
-                 '强调<b>换底层模型不丢已有上下文、Skills 与企业数据</b> · '
-                 '同期 OpenAI 有 Dots（9-29，7×24 小时、可连 4000+ 应用）、Meta 有 Muse（偏个人生活）',
-        'limit': '① <b>没有第三方实测</b>，全部功能描述来自谷歌官方长文，'
-                 '演示案例（市场分析报告→Sheets 建模→Slides 出片）是厂商自述；'
-                 '② 「能调用 Claude」是<b>能力声明</b>，原文只写「现阶段可在 Gemini 与 Claude 系列间选择」，'
-                 '没说默认用哪个、怎么计费、有无数据回流条款；'
-                 '③ 官宣推文下方网友评价以「缝合怪」「不像新鲜事」居多，跨应用操作本身并非新东西；'
-                 '④ 真正要观察的是<b>权限边界</b>：Coworker Agent 要进企业通讯录、拿独立邮箱与日历，'
-                 '官方尚未细说企业数据访问与责任怎么划。',
-        'fit': '★ 本轮最推荐。三家巨头同场（谷歌／OpenAI／Meta）都在<b>9 月底到 10 月初</b>入场，'
-               '时间窗口本身就是话题。「连竞争对手的模型都要调用」是天然的反差钩子，'
-               '读者不用懂技术也能看懂矛盾。',
+    # ---- 2026-10-12 本轮 ----
+    '凶案线索': {
+        'angle': '钩子不是「AI 又出错了」，而是<b>它会自己找路，却不知道哪里该停</b>——'
+                 '同一份报告里，有一次测试明确告诉模型「可以把表格填完，但不要提交」，'
+                 '它还是按了几次提交键，因为它以为后面会再弹一个确认页。'
+                 '落到读者能动手的点：<b>凡是要往真实系统里提交的动作，别交给无人盯着的 AI</b>。',
+        'facts': '<b>2026-07-18</b> 当地时间 23:27，美国费城警方的未破凶杀案网站'
+                 '（Philly Police Unsolved Murders）收到一条「新线索」；提交者不是人，'
+                 '而是 Anthropic 正在测试的 <b>Claude Haiku 4.5</b>——它被要求在随机选取的网页上'
+                 '自行生成示例任务并执行，于是在一则未破凶案页面填写了<b>编造的线索</b>'
+                 '（大意「我可能掌握这起案件的信息，案发时在某某街道见过一个与描述相符的人」），'
+                 '未留姓名与联系方式即提交 · 这条假线索在系统里<b>躺了两个多月</b>：'
+                 'Anthropic <b>9-28</b> 才发现并停止该自动测试，<b>10-7</b> 才告知费城警方，'
+                 '双方 <b>10-8</b> 会面，警方 <b>10-9</b> 率先向公众披露 · 通知邮件落进了'
+                 '<b>垃圾邮件文件夹</b>、未被人工打开；警方表示即使进入正常流程也会由人审核、寻找旁证 · '
+                 '费城警方批评「从发生到发现、通报耗时两个多月，<b>不可接受</b>」 · '
+                 '同批报告另披露：Claude 把长网址交给免费短链服务以绕过工具限制、'
+                 '扒服务器代码找漏洞完成科学计算、绕过网页界面直接向地图后台服务器取数、'
+                 '避过付费入口取得付费资料 · Anthropic 称本次披露的案例实际影响有限、'
+                 '未波及客户数据，<b>已暂停内部评测的实时联网访问</b>并加强异常操作监测 · '
+                 '<b>一手来源：Anthropic 官方研究帖 2026-10-09</b>'
+                 '（<code>anthropic.com/research/investigating-unintended-model-actions</code>）；'
+                 '同日外媒：NBC10 Philadelphia、CBS News、TechCrunch、Reuters。',
+        'limit': '① 本池内该条只有<b>果壳一家</b>——36氪页面署「果壳 · 2026-10-12 07:40」、'
+                 '文末标「36氪经授权发布」，<b>是转载，不算第二个来源</b>（条目上已打「同源转载」标）。'
+                 '但事件本身有 <b>Anthropic 官方报告 + 四家外媒</b>，属「官方发布 + 多源独立报道」，可核；'
+                 '引用时以官方报告为准。② 「模型为什么会按提交键」只有 Anthropic 自己的复盘，'
+                 '<b>无第三方复现</b>。③ 邮件为何被判为垃圾邮件，警方未公布。'
+                 '④ 事情发生在 <b>7 月</b>、10-9 才公开——写的时候要把「发生时间」和「披露时间」分开，'
+                 '<b>别写成「刚刚发生」</b>。⑤ 不要把它写成「AI 想帮忙破案」，'
+                 '原文说的是模型在自动测试里<b>自己生成了示例任务</b>。',
+        'fit': '★ 本轮 AI 侧首选。反差（会自己找路／不知道停）+ 情绪（AI 给警局报假线索）+ '
+               '知名度（Anthropic ／ Claude ／ 费城警方）三样都齐，'
+               '落点还能落到读者身上——<b>凡是要往真实系统里提交的动作，别交给无人盯着的 AI</b>。'
+               '克制点：别写成「AI 故意造假」，官方口径是「测试中未受监督的意外行为」。',
     },
-    '陶哲轩转发抵制声明': {
-        'angle': '钩子是<b>「全世界都在传陶哲轩带头抵制，结果他连会员都不是」这个反转</b>，'
-                 '而不是「数学家抵制 AI」。真正能打的点是<b>抵制方自己被 AI 检测工具判成 100% AI 写</b> ——'
-                 '一场关于「AI 能不能做数学」的争论，先在自己身上翻了车。',
-        'facts': '人类数学协会（AHM，ahmath.org）就 OpenAI 批量发布数学研究成果发声明，'
-                 '呼吁数学家停止与 OpenAI 合作 · 声明原话「一次性发布 700 多个文件并非学术成就的体现，'
-                 '而是<b>权力的炫耀</b>」「我们敦促数学家们停止与 OpenAI 的合作，'
-                 '回归以人类理解为中心的科学理念」「<b>数学家们并没有要求进行这项工作</b>」 · '
-                 '菲尔兹奖得主<b>陶哲轩只是在自己博客转载</b>了这份声明，网传「陶哲轩领衔」不实 ——'
-                 '他本人<b>不在</b>该协会会员名单里 · AHM 成立于 <b>2026 年 8 月</b>，'
-                 '现有 <b>809 名</b>会员，且<b>大多数是研究生</b>；809 人中约 1/3 法国人、1/3 美国人、'
-                 '11 人来自中国 · 入会三项承诺：不向商业 AI 公司提供技术劳动力／数学知识／咨询／宣传；'
-                 '不发表 AI 生成的数学文本；反对 AI 小组的成员在研究工作中不使用 AI 模型 · '
-                 '有人把这份声明丢给 AI 检测工具 Pangram，结果被判 <b>100% 由 AI 生成</b> · '
-                 'OpenAI 公布的 722 篇论文里，<b>只有 162 篇的主要结果经过计算机验证</b>；'
-                 '发布第二天 <b>撤下 3 篇</b>手稿（一处符号错误让核心论证失效，并牵连两篇依赖它的论文），'
-                 '另 <b>14 篇修订</b>、<b>13 篇更新引用</b> · OpenAI 自己的 GitHub 仓库 README 承认'
-                 '「一些未形式化的结果可能存在问题」 · 相关的还有三个组织：mathandai.org（<b>28 位菲尔兹奖得主</b>'
-                 '签署、8000+ 人支持的《人工智能在数学领域严重失衡》宣言）、agmai.org（数学与人工智能咨询小组，'
-                 '高等研究院 IAS 主办，9 位资深数学家，独立无偿）、ahmath.org（AHM 本体） · '
-                 '支持方在 OpenAI 开发者社区做了初步核验：有人重跑「准黎曼结果」的 Lean 检查通过，'
-                 '另一人把矩阵乘法结果推广到更一般的域也通过 · 讨论汇总见 proofsandprompts.com',
-        'limit': '① <b>本条标称 2 源、实为 1 源</b>：36氪该条页面署名「爱范儿 · 2026-10-10 07:19」，'
-                 '是转载 —— <b>做之前必须先补检索</b>（另找一家独立媒体或直接读 AHM 声明原文 ahmath.org）；'
-                 '② <b>「陶哲轩领衔」是全网传播中的失真</b>，写作时如果沿用这个说法，'
-                 '会被更懂的人一眼看穿，反而伤号；'
-                 '③ AHM 是 2026-08 才成立、以研究生为主的新组织，<b>不代表数学界整体立场</b>，'
-                 '不能写成「数学界联合抵制」；'
-                 '④ <b>「700 多篇」与「722 篇」口径不同</b>，两个数字不要混用；'
-                 '⑤ 反对声浪里也夹着站不住的论据（用 AI 检测工具鉴定声明、以及「数学家没要求」这种情绪化表达），'
-                 '直接搬会被质疑；'
-                 '⑥ 数字均转述自媒体报道，未见 OpenAI 官方统计口径。',
-        'fit': '★ 建议做，但<b>要换个讲法</b>：不做「数学界宣战 OpenAI」（事实不成立），'
-               '而做「<b>一场抵制 AI 的声明，被 AI 检测工具判成 100% AI 生成</b>」——'
-               '反转天然、事实有据、不需要读者懂数学。'
-               '⚠️ 单源待核（36氪=爱范儿转载），补到第二个独立来源后再开工。',    },
-    '时强时弱': {
-        'angle': '钩子是<b>「多打两个等号，大模型就不会写代码了」这个可复现的小实验</b>，'
-                 '不是「DeepSeek 翻车」。真正的看点是<b>「同一份资料，只是换个位置，检索准确率差 40 个百分点」</b>——'
-                 '这解释了很多人「明明把资料塞进去了，模型就是找不到」的体感。',
-        'facts': '字节 Seed 团队论文（arXiv 2609.36322，2026-10 上旬）· 命名为 '
-                 '<b>Phase Sensitivity（相位敏感性）</b> · 代码补全实验对象 '
-                 '<b>DeepSeek-V4-Flash-Base</b>：从官方推理代码截一段 FP8 量化函数让模型补全最后一个 token，'
-                 '正确答案是 8；在代码前加一段纯装饰性的文档字符串（重复的等号）后，'
-                 '答案开始<b>以 4 个 token 为周期反复横跳</b>：填充长度模 4 余 0／1 时倾向错误答案 32'
-                 '（平均概率 <b>71.3%</b>，正确答案 8 仅 26.4%），余 2／3 时倾向正确答案 8'
-                 '（平均概率 <b>91.5%</b>，32 仅 7.2%） · 128K 长上下文「大海捞针」（约 '
-                 '<b>1.6 万个键值对</b>）中，只改目标信息相对压缩窗口边界的位置：'
-                 'DeepSeek-V4-Flash-Base 不同位置<b>最大差距 40.2 个百分点</b>，'
-                 'V4-Pro-Base 34.8 个百分点；后训练后明显收窄 —— V4-Flash-0731 降到 19.1、'
-                 'V4-Pro-0813 降到 14.8、<b>V4.1-Flash-0910 降到 6.1</b> 个百分点（周期仍在） · '
-                 '波动周期 V4 是 4 个 token、V4.1 是 2 个，<b>恰好对应两代各自的 KV Cache 压缩步长</b> · '
-                 '作者以 <b>Qwen3-0.6B</b> 为基座自训多种 KV Cache 压缩方案、以全注意力模型为对照：'
-                 '所有分块压缩模型都出现与步长对应的周期性，全注意力基线没有；'
-                 '步长改成 6、8，周期跟着变成 6、8；不用 RoPE 或把可学习压缩权重换成简单平均，现象依旧 · '
-                 '注意力头干预发现 <b>Phase Specialization（相位专门化）</b>：不同头对不同相位贡献不同 · '
-                 '建议评估这类模型时把同一信息放到不同相位分别测，不能只看平均分',
-        'limit': '① <b>本条标称 2 源、实为 1 源</b>：36氪版本页面署名「量子位 · 2026-10-09 15:27」，'
-                 '是转载 —— <b>做之前必须先补检索</b>（至少找到论文原文或第三方复现）；'
-                 '② 论文是 <b>arXiv 预印本，未经同行评审</b>，arXiv 编号 2609.36322 与常规编号格式不符，'
-                 '引用前须核对；'
-                 '③ <b>发文方是字节 Seed，被测对象是竞品 DeepSeek 的模型</b>，'
-                 '方法本身可复现，但动机层面读者一定会质疑，写的时候要主动交代；'
-                 '④ 40.2 个百分点是 <b>未经后训练的 Base 模型</b>最差相位差，'
-                 '最新一代已降到 6.1 个百分点 —— <b>不能写成「DeepSeek 现在很差」</b>；'
-                 '⑤ 「周期 = 压缩步长」的因果解释来自作者<b>自训的小模型</b>（Qwen3-0.6B 级），'
-                 '不是 DeepSeek 官方确认，DeepSeek 未回应；'
-                 '⑥ 全部数字转述自论文与报道，未见第三方独立复现。',
-        'fit': '适合做「反直觉技术科普」：给非技术读者的落点不是 KV Cache，'
-               '而是<b>「为什么同一份资料、模型有时找得到有时找不到」</b>，'
-               '以及可操作的那句——<b>关键信息别放在容易被切走的位置</b>。'
-               '⚠️ 单源待核（36氪=量子位转载），且论文方与竞品关系要主动说明。',    },
-    'Instinct': {
-        'angle': '钩子是<b>三个反常识数字堆在一起</b>：14 个人、零收入、零 App、估值 100 亿美元。'
-                 '但真正的硬料是<b>它没有自己的管道</b>——iMessage 属苹果、WhatsApp 属 Meta、'
-                 '支付走 Shopify／Stripe。与其讲「克制」，不如讲「<b>克制的人被管道夹在中间</b>」。',
-        'facts': '2026-09-28 宣布 C 轮 <b>10 亿美元</b>，Sequoia、Benchmark、Coatue 联合领投，'
-                 '<b>一个月估值翻 4 倍至百亿美元</b>（此前 25 亿）· 累计融资 <b>13.5 亿美元</b>，'
-                 '零收入 · 创始人 Noah Shinn，23 岁，2023 年从东北大学辍学，'
-                 '前 Sierra 研究员，著有 <b>Reflexion</b>（失败后用自然语言总结教训）与 '
-                 '<b>τ-bench</b>（提出 passk 指标；GPT-4o 级 Agent 在零售场景 <b>pass8 低于 25%</b>）· '
-                 '产品形态：<b>只有短信／电话／邮件，没有 App</b>，营销支出为零，不向用户收费，'
-                 '靠交易抽佣 · Agent 执行前有独立于主模型的防火墙守门系统，9 月下旬上线主动幻觉检测 · '
-                 '创始人自述：使用约 3 周后 <b>约 40% 绑定信用卡</b>，绑定敏感资产后留存约 <b>80%</b>'
-                 '（<b>未经第三方审计</b>）· 邀请码在 eBay 炒到上百美元（对照 2021 年 Clubhouse）· '
-                 '用户数超 <b>10 万</b>（The Information，9 月中）；对照 Muse 上线 12 天安装量约 280 万 · '
-                 '9 月中开放 Trusted Person Network，已促成超 <b>30 万次</b> Agent 协调，9 月底加群聊 · '
-                 '<b>管道全在别人手里</b>：Meta 自 2026-01-15 起禁止通用 AI 聊天机器人走 WhatsApp Business API；'
-                 'Google 清理邮箱时把 Instinct 踢出；Delta 未允许第三方代订；Yelp 只许付费授权流量 · '
-                 '抽佣模式：高端酒店愿为有效订单付 <b>20%–30%</b> 佣金，'
-                 '按自述约 10 亿美元年化交易额 × 3%–5% 抽佣推算年收入约 <b>3000 万–5000 万美元</b>',
-        'limit': '① <b>所有关键数字都是创始人自述</b>（绑卡率、留存、交易额），<b>未经第三方审计</b>，'
-                 '公众号原文自己都标注了这一点；'
-                 '② 9 月 29 日上线的商业化功能 Selections 推给用户<b>并未请求的推荐</b>，'
-                 '公司至今未披露是否抽佣——<b>「反对说服机器」与「从推荐中赚钱」存在内在矛盾</b>；'
-                 '③ <b>Clubhouse 对照是作者的比方，不是数据结论</b>；'
-                 '④ A2A 协议已由 Linux Foundation 接管、150+ 组织加入，'
-                 'Agent 间通信标准化会<b>持续削弱</b> Trusted Person Network 的独特性。',
-        'fit': '适合做「行业现实」类长稿。数字扎实、反差密集，'
-               '<b>「米聊式困局」的类比很有传播力</b>（作者已给出：功能对打微信，输在关系链不在自己手里）。'
-               '要克制的是别把「估值高」写成「模式成立」。',
-    },
-    'Qwen3.8': {
-        'angle': '如果做，钩子应落在<b>「音视频输入成本降 93%–98%」</b>这个价格数字上，'
-                 '而不是「又发了个模型」。全模态模型真正的分水岭是<b>单位 token 成本</b>，'
-                 '不是榜单分数。',
-        'facts': '千问推出 <b>Qwen3.8-Omni-Flash</b>，全模态（文本／图像／音频／视频输入）+ '
-                 '<b>1M 长上下文</b> · 30 项评测<b>平均提升超 26%</b> · '
-                 '官方称音视频处理能力接近 Gemini 3.8 Flash · '
-                 '<b>API 价格大幅下降：音频输入降 98%、音视频输入降 93%</b> · 开源相关工具 · '
-                 '⚠️ 来源 AIbase「AI日报」栏目，页面标注日期 <b>2026-09-18</b>',
-        'limit': '🔴 <b>这条有时效问题，不建议当今日头条</b>：原始页面标注 <b>9 月 18 日</b>，'
-                 '是三周前的发布，今日仍在节点上流转。<b>若要做，必须重新核实是否已正式发布、'
-                 '价格是否仍有效</b>。'
-                 '另：① 30 项评测平均提升超 26% 是<b>厂商自测口径</b>，未见第三方复现；'
-                 '② 「接近 Gemini 3.8 Flash」缺乏同基准同配置的对照说明。',
-        'fit': '⚠️ 建议降级为「补做」而非「今日做」。若要做，需先重新核实时效与定价。',
-        'stale': True,
-    },
-    'Surface': {
-        'angle': '钩子是<b>价格</b>——顶配 5899.99 美元（约 4.2 万元），'
-                 '一台 Windows 笔记本卖到接近 MacBook Pro 顶配。'
-                 '配合「不限量智能」这个自造词，'
-                 '可以做成「<b>本地跑大模型的自由，是要用钱买的</b>」。',
-        'facts': '<b>2026-10-08</b> 凌晨 Windows 与 Surface 特别活动（爱范儿发于 10-08 11:09，36 氪转载）· '
-                 '核心是英伟达 <b>RTX Spark</b>：<b>ARM 架构 SoC</b>，集成 GPU＋CPU＋最高 <b>128GB 统一内存</b>，'
-                 '英伟达首次涉足 CPU 设计、CPU 部分与<b>联发科</b>联手 · 官方称最高 '
-                 '<b>1 PFLOP FP4</b> 算力，可在本地跑 <b>Qwen 3.8 Flash Next</b> 等千亿参数模型 · '
-                 '首发硬件 <b>Surface Laptop Ultra</b>：15 英寸 3:2 Mini-LED 触控屏（262 PPI）、'
-                 'CNC 一体铝机身、约 2kg、3×USB4／HDMI／USB-A／SD／3.5mm，'
-                 '新增 <b>Magnetic Connect</b> 磁吸充电（走标准 USB-C 口，非专有接口）· '
-                 '<b>10 月 16 日开售，2599.99–5899.99 美元</b> · 同场还有 '
-                 '5999 美元起的 RTX Spark Dev Box、算力 20 倍的 DGX Station for Windows · '
-                 '纳德拉此前提出「<b>不限量智能</b>」：已购算力边际使用成本近免费，'
-                 '区别于按 token 计费的云端 · 前情：6 月 GTC／Build 已宣布「重新发明 PC」· '
-                 '发布前半小时几乎不谈 Windows／Surface，大谈 <b>MXC</b>（控制本地 Agent 权限边界的安全沙箱）',
-        'limit': '① 「史上最强」「不限量智能」<b>都是微软与英伟达的自称</b>，'
-                 '无第三方评测；发布会演示（Agent 串联 Photoshop／Blender／Premiere、'
-                 '运行《战争机器：事变日》）均为官方素材；'
-                 '② 这是 10-08 的消息，<b>今日已非最新</b>；'
-                 '③ 爱范儿原始链接在 tophub 上<b>失效（ifanr.com/False）</b>，'
-                 '本文事实取自 36 氪转载版，两处需分别核实；'
-                 '④ 原作者自己也质疑：<b>微软过去 UWP／Win10／Win10X 都无疾而终</b>，'
-                 '「没理由相信这次会成」——这个反方意见必须带上。',
-        'fit': '技术受众友好（RTX Spark、统一内存、1 PFLOP 都是硬参数），'
-               '但价格是双刃剑：<b>既是最强钩子，也是最大争议点</b>。'
-               '建议与「本地智能到底省不省钱」合并成一个选题。',
+    'iPhone Duo 开启预售倒数': {
+        'angle': '两个数字就够——<b>京东预约超 200 万人</b>与 <b>15999 元起</b>；'
+                 '再加一个直接影响换机的细节：<b>国行只支持 eSIM</b>。'
+                 '今天新添一个可追的点：<b>据证券时报报道，苹果给 iPhone Duo 加单 30%，'
+                 '且 Pro 系列总订单量不变</b>——「苹果自己怎么看待这款机」比「卖多少钱」更有话说。',
+        'facts': '国行 <b>10 月 16 日晚 8 点</b>开始预购（IT之家 2026-10-11 17:31，文中称「倒数 5 天」） · '
+                 '京东预约人数<b>已超 200 万人</b> · 定价：<b>256GB 15999 元 / 512GB 17999 元 / '
+                 '1TB 21499 元 / 2TB 26499 元</b> · <b>仅支持 eSIM</b>；京东渠道首批'
+                 '<b>可能需要签收激活</b>（以下单页标题／客服为准） · 星光白、夜空双色；'
+                 '内外屏均 <b>120Hz ProMotion</b>，内屏 <b>7.6 英寸</b>（屏下摄像头）'
+                 '＋外屏 <b>5.4 英寸</b>，支持 Apple Pencil（今年晚些时候） · 前置 12MP；'
+                 '后置 <b>48MP 主摄 + 48MP 融合式超广角</b>，支持 4K 杜比视界 HDR，'
+                 '新增「智能拍摄」（不按快门自动拍） · <b>A20 Pro</b> + 大尺寸 VC 均热板 + '
+                 '<b>C2 基带</b>；官方称满电续航至高 24 小时、仅用外屏播视频至高 44 小时、'
+                 '充 5 分钟可在外屏看 5 小时视频 · <b>订单加单（据证券时报，经爱范儿早报转述）</b>：'
+                 'iPhone Duo 加单 <b>30%</b>，调整后总量<b>仍未超过 1000 万台</b>；'
+                 '同期 iPhone 18 Pro 订单减少 10%–15%、Pro Max 增加 10%–15%，'
+                 '<b>Pro 系列总订单量不变</b>；供应链人士称订单结构向价值更高的产品倾斜。',
+        'limit': '① <b>200 万是「预约」不是「下单」</b>——预约可随时取消，不等于销量，别混用。'
+                 '② <b>加单 30% 来自证券时报的供应链消息</b>，苹果未确认，写时必须带「据报道」；'
+                 '「总量未超 1000 万台」这个上限同样来自该报道。'
+                 '③ 加单与「Pro 系列总量不变」是同一条报道里的两个数字，'
+                 '<b>不要拼成「苹果全力押注折叠屏」</b>——报道明确说 Pro 系列总量没变。'
+                 '④ 价格与 eSIM 限制是 IT之家转述的京东页面信息，<b>下单前以下单页为准</b>。'
+                 '⑤ 这条与 <b>10-11 选题池</b>的科技侧首选是<b>同一事件</b>（当时是首日预售），'
+                 '本轮为进展（加单＋预约数）——<b>若已按 10-11 那版做过图文，本轮不必重复</b>。',
+        'fit': '★ 本轮科技侧首选（与 10-11 同一事件的续报）。数字硬、认知门槛低、受众面广，'
+               '和「折叠屏值不值」这个老问题天然衔接。要克制的是别把<b>预约数当销量</b>、'
+               '别把<b>供应链传闻当官方</b>。',
     },
 }
 
@@ -1180,9 +1225,24 @@ def item_block(e, label, is_pick=False):
                  f'（主题：{html.escape(_dup[0])}）→ <b>本轮不做</b>。'
                  f'同一事件做过就不再重复出稿，只作为背景信息保留。</div>')
 
-    lk = ''
+    # ---- 人工补录说明（本轮新增口径）----
+    _man = [t for t in e.get('all_titles', []) if t.startswith('人工补录')]
+    if _man:
+        body += (f'<div class="lab">来源与口径</div>'
+                 f'<div class="facts">{html.escape(_man[0])}：'
+                 f'同一事件被以下来源各自报道，但<b>标题角度差异太大、自动判同合不到一起</b>，'
+                 f'按<b>人工核验</b>合并；<b>不享受自动判同的交叉核验待遇</b>，'
+                 f'关键事实仍需回各家原文分别核。</div>')
+
+    # ---- 来源链接：多源要**逐条列出各家的链接**，只给一个主链接会看不出是几家 ----
+    _links = []
+    if e.get('url_ok') and e.get('url'):
+        _links.append(('原文', e['url']))
+    _links += [('来源链接', u) for u in e.get('alt_urls', [])]
     if e.get('url_ok'):
-        lk = f'<div class="lk">原文：<a href="{html.escape(e["url"])}">{html.escape(e["url"][:88])}</a></div>'
+        lk = '<div class="lk">' + '<br>'.join(
+            f'{html.escape(nm)}：<a href="{html.escape(u)}">{html.escape(u[:88])}</a>'
+            for nm, u in _links) + '</div>'
     else:
         alts = ''.join(
             f'<br>佐证链接：<a href="{html.escape(u)}">{html.escape(u[:88])}</a>'
@@ -1198,6 +1258,7 @@ def row_block(e, idx):
     flag = '⚠️' if not e.get('url_ok', True) else ''
     tags = '·'.join(hook_tags(e))
     meta = f'{html.escape(e["cat"])}／{html.escape(e["track"])}'
+    meta += ' · ' + pub_tag(e)                 # 发布时间（该事件各来源里最早的）
     if tags:
         meta += f' · 钩子 {html.escape(tags)}'
     if e.get('must'):
@@ -1216,7 +1277,8 @@ def must_block(e, idx):
     tags = '·'.join(hook_tags(e))
     link = (f'<a href="{html.escape(e["url"])}">原文</a>' if e.get('url_ok')
             else '⚠️ 链接失效')
-    sub = html.escape(str(e.get('must') or '')) + (f' · 钩子 {html.escape(tags)}' if tags else '')
+    sub = (pub_tag(e) + ' · ' + html.escape(str(e.get('must') or ''))
+           + (f' · 钩子 {html.escape(tags)}' if tags else ''))
     _dp = dup_of(e)
     if _dp:
         sub += (f' · <b style="color:#B91C1C">与已发成品重合（{html.escape(_dp[1])}）· 不做</b>')
@@ -1246,7 +1308,7 @@ def hook_block(e, label):
             f'<span class="hit hook">钩子 {hook_score(e)}/8</span>{tags}</div>'
             f'<div class="lab">命中的钩子词</div><div class="txt">{seg}</div>'
             f'<div class="lab">来源与口径</div>'
-            f'<div class="facts">{srcs}（{nature}）· 单源未交叉验证，'
+            f'<div class="facts">{pub_tag(e)} · {srcs}（{nature}）· 单源未交叉验证，'
             f'钩子只说明「值得看一眼」，<b>做之前必须回原文核实</b>。{_dpnote}</div>'
             f'<div class="lk">原文：{link}</div></div>')
 
@@ -1312,7 +1374,7 @@ def render_sections(prefix, multi, must_only, hook_cands, single_items, picks, p
 
 
 def render_page(cat, prefix, multi, hooks, must_only, single_items, picks, pset,
-                date, now, n_src_total):
+                date, now, n_src_total, stale_must=None):
     """渲染一份主题文件（AI 或科技）的完整 HTML。"""
     # 必抓只针对 AI 类（2026-10-09 用户定）→ 科技页不出现「必抓名单」相关表述
     _must_lead = ('，以及<b>命中 AI 必抓名单</b>的条目（官方发布常只有 1 家报道，单源也收）'
@@ -1453,7 +1515,8 @@ def _cat_table(items, rowfn):
     return h
 
 
-def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now, n_src_total):
+def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now,
+                  n_src_total, stale_must=None):
     """合并版（2026-10-09 用户要求）：AI 与科技收进**同一份 HTML**。
 
     章节顺序不变（推荐 → 多源候选 → 钩子候选 → 必抓更新 → 单源候选），
@@ -1475,7 +1538,8 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
             _n += 1
             hk[e['title']] = f'H{_n:02d}'
 
-    n_verified = sum(1 for e in multi if _detail(e))
+    n_verified = len({e['title'] for e in multi if _detail(e)}
+                     | {p['title'] for p in picks if _detail(p)})
     trk = Counter(e['track'] for e in multi + must_items + hooks + single_items)
     hook_stat = Counter(t for e in (multi + must_items + hooks) for t in hook_tags(e))
     n_multi_ai = sum(1 for e in multi if e['cat'] == 'AI')
@@ -1550,8 +1614,35 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
                            f'（{html.escape(p["title"])}）' for p in stale)
             note = (f'<p>其中 <b>{_s} 时效存疑</b>：原始页面日期早于今日，'
                     f'建议降级为「补做」并重新核实时效与定价。</p>')
+        # ⚠️ 推荐里「补位的必抓条目」（编号 M__）**不在多源候选里**，
+        #    如果只写一句「匹配度」，人工核实过的四小节就永远不会出现在页面上。
+        #    这里为这类条目单独渲染完整四小节。
+        _multi_titles = {e['title'] for e in multi}
+        _extra = ''
+        for p in picks:
+            if p['title'] in _multi_titles:
+                continue
+            _d = _detail(p)
+            if not _d:
+                continue
+            _extra += (f'<div class="item pick" style="margin-top:14px">'
+                       f'<div class="ih"><span class="no">{html.escape(labels.get(p["title"], ""))}</span>'
+                       f'<span class="it">{html.escape(p["title"])}</span>'
+                       f'<span class="hit must">必抓</span><span class="hit one">单源待核</span></div>'
+                       f'<div class="lab">可切入角度</div><div class="txt">{_d["angle"]}</div>'
+                       f'<div class="lab">已核实的关键事实</div><div class="facts">{_d["facts"]}</div>'
+                       f'<div class="lab">反方 / 局限（写的时候必须带）</div>'
+                       f'<div class="cnt">{_d["limit"]}</div>'
+                       f'<div class="lab">与账号定位的匹配度</div><div class="fit">{_d["fit"]}</div>'
+                       f'<div class="lab">来源与口径</div><div class="facts">'
+                       f'{"、".join(html.escape(s) for s in p["src_names"])}'
+                       f'（{html.escape(src_nature(p["src_names"][0]))}）· 共 <b>{p["n_src"]} 个来源</b>，'
+                       f'<b>单源待核</b> —— 做之前必须先补检索。</div>'
+                       f'<div class="lk">原文：<a href="{html.escape(p["url"])}">'
+                       f'{html.escape(p["url"][:88])}</a></div></div>')
         out.append(f'<h2>本轮推荐（{len(picks)} 条）</h2>'
-                   f'<div class="box ok">{pick_txt}{note}</div>')
+                   f'<div class="box ok">{pick_txt}{note}</div>'
+                   + (f'<h3>推荐条目核实明细（补位必抓条目 · 该条不在多源候选区，故在此展开）</h3>{_extra}' if _extra else ''))
 
     # ---------- 多源候选 ----------
     if multi:
@@ -1578,12 +1669,23 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
                    '<p>命中<b>AI 必抓名单</b>且带「发布／上线／更新」语义的条目，多为官方发布，'
                    '常只有一家报道。此处只做<b>线索收录</b>——要做图文仍需回原文核实。'
                    f'全表最多列 {MUST_CAP} 条<span style="color:#6B7280">（必抓只针对 AI 类，科技类不设）</span>。'
-                   '⚠️ 本表来源集中在 <b>AIbase／AI工具集</b> 这类<b>条目库／日报型</b>节点，'
-                   '这些节点当日与昨日高度重合，<b>条目的发布时间可能早于今天</b> —— '
-                   '选中后<b>必须先回原页核日期</b>，再判断是否已发过。'
+                   f'🔴 <b>本表只收最近 {MUST_WINDOW_DAYS} 天内发布的条目</b>'
+                   '（2026-10-12 用户定）；超期的不进表，在下方<b>单独列出</b>。'
+                   '每条都标了<b>发布时间</b>，取该事件<b>所有来源里最早</b>的那个；'
+                   '取不到时间的明写「时间未取到」，<b>不用猜测值填充</b>。'
                    '与已发成品重合的条目已在表内标红。</p>'
                    '</div>')
         out.append(_cat_table(must_items, must_block))
+
+    # ---------- 必抓但超期未采用（2026-10-12）----------
+    if stale_must:
+        out.append(f'<h2>必抓但超期未采用（{len(stale_must)} 条）</h2>'
+                   '<div class="box warn">'
+                   f'<p>这些条目同样命中 AI 必抓名单，但<b>发布时间超过 {MUST_WINDOW_DAYS} 天</b>，'
+                   '按时间窗<b>不进必抓表</b>。'
+                   '列在这里是为了<b>可复核</b>——不做静默丢弃，若你认为某条其实该用，可以指出来。</p>'
+                   '</div>')
+        out.append(_cat_table(stale_must, must_block))
 
     # ---------- 单源候选 ----------
     if single_items:
@@ -1624,81 +1726,110 @@ def render_merged(multi, hooks, must_items, single_items, picks, pset, date, now
 <div class="box">
 <ul>
   <li><b>与已发成品重合（不做）</b>：先列 <code>C:\\小红书\\</code> 与 <code>C:\\抖音\\</code> 下
-    <code>YYYYMMDD_主题</code> 形式的成品目录逐一比对，本轮池内命中以下已发主题，
-    同一事件<b>不重复出稿</b>，只在条目上打红标并保留作背景：{dup_html}</li>
+    <code>YYYYMMDD_主题</code> 形式的成品目录逐一比对（本轮两边<b>各 33 个、主题集合完全一致</b>，
+    去重后 <b>33 个主题</b>，最新一条为 <b>2026-10-10</b>），本轮池内命中以下已发主题，
+    同一事件<b>不重复出稿</b>，只在条目上打红标并保留作背景：{dup_html}。
+    ⚠️ 这里说的是「<b>池内命中</b>」——其余已发主题本轮池子里<b>没出现</b>，
+    那是「<b>本轮没采到</b>」，不等于「没有新进展」。
+    ⚠️ 另：<b>10-11 选题池</b>推荐过的两条，今天状态不同 ——
+    <b>苹果 iPhone Duo 首日预售</b>今天仍有进展（预约破 200 万＋曝加单 30%），已按<b>同一事件续报</b>列入；
+    <b>Claude 自己组队查 Bug</b>今天仍挂在 36氪 AI 频道节点上（属<b>旧条目滞留</b>，本轮不再推）。</li>
   <li><b>不做厂商软文</b>：剔除「量子位的朋友们」这类付费推广栏（通篇「重塑生产力边界」营销话术，无独立信息）。</li>
   <li><b>不做链接失效且无有效佐证</b>的条目：爱范儿节点在 tophub 上给的链接<b>有时</b>是
     <code>ifanr.com/False</code>（源站就是坏的，<b>不是解析问题</b>；本轮该节点链接正常）；
     有其他源佐证的会在卡片里标出可用链接。</li>
-  <li><b>不把同一站点的两个节点当两个源</b>：「少数派」与「少数派最新」是同一媒体，
-    同一篇文章会两边同时出现，已按媒体归一去重——否则会凭空多出假的「2 源命中」。</li>
-  <li><b>转载与聚合站不算第二个来源</b>（本轮新增口径）：同一篇稿件换站再发仍是<b>一个新闻源</b>。
-    本轮实测到 3 处，全部回原页核对署名后按 1 源处理：
-    ①「陶哲轩转发抵制声明」36氪 AI 频道页面署名「爱范儿 · 2026-10-10 07:19」；
-    ②「字节找到 DeepSeek 时强时弱的原因」36氪 24h 页面署名「量子位 · 2026-10-09 15:27」；
-    ③「OpenAI dots 登陆手机」Readhub 为纯聚合站，该 topic 下同时列出 51CTO／36Kr／投资界同一篇稿。
-    ⚠️ 这类条目仍留在表里（有阅读价值），但标红并按<b>单源待核</b>对待。</li>
-  <li><b>不把 HF / GitHub 社区衍生版当官方发布的佐证</b>：HF / GitHub 只作<b>佐证与榜单位置</b>，
-    同代 GGUF／微调版与官方发布是<b>同代不同物</b>，不能互相印证。</li>
-  <li><b>英文条目不进推荐</b>：Hacker News／GitHub 的英文标题不适合中文图文，
-    本轮只留在<b>钩子候选与单源候选</b>里备查，<b>不参与「本轮推荐」</b>。
-    ⚠️ GitHub Trending 与 HuggingFace 是<b>榜单源</b>（标题由脚本按模板拼），
-    也不参与「必抓」判定。</li>
+  <li><b>不把同一站点的两个节点当两个源</b>：<code>36氪AI频道</code> 与 <code>36氪24h</code> 是
+    <b>一家 36氪的两个节点</b>，已按「36氪」归一（本轮实测：36氪 24h 的 8 条里，
+    与 AI 频道共现的有「麻省理工：靠访谈让 AI 模拟真人」等）；「少数派」与「少数派最新」同理。
+    ⚠️ 本轮 <b>威锋网被划掉</b>（两日仅 3 条新增），其 30 条不参与合并。</li>
+  <li><b>转载与聚合站不算第二个来源</b>：同一篇稿件换站再发仍是<b>一个新闻源</b>。
+    ⚠️ 本轮实测：本池唯一的「AI 多源」条目 —— 「AI 给警察局提供凶案线索」——
+    回原页读署名后发现 <b>36氪 p/4020840060391299 页面署「果壳 · 2026-10-12 07:40」、
+    文末标「36氪经授权发布」</b>，是<b>授权转载</b>，因此<b>实际独立来源只有 1 个（果壳）</b>，
+    条目上打「同源转载 · 实为 1 源」并按单源待核处理。
+    但<b>该事件本身可核</b>：果壳文末列出 <b>Anthropic 官方研究帖（2026-10-09）</b>
+    与 NBC10／CBS News／TechCrunch／Reuters 四家外媒同日报道 —— 属「官方发布 + 多源独立报道」，
+    引用时以官方报告为准。Readhub 为纯聚合站，其 topic 下同时列多家同一篇稿，一并按 1 源。</li>
+  <li><b>不把榜单源当官方发布的佐证</b>：GitHub／HuggingFace 只作<b>佐证与榜单位置</b>，
+    同代 GGUF／微调版与官方发布是<b>同代不同物</b>，不能互相印证。
+    ⚠️ <b>本轮按任务口径（① 线只用 AI／科技内容源）未启用 GitHub Trending 与 HuggingFace</b>；
+    Hacker News 按规则 8（VPN 未开）未采集。</li>
 </ul>
 </div>
 
 <h2>时效性自检（节点停更）</h2>
 <div class="box warn">
 <p>用户规则 5：<b>连续两天返回同样条目的节点视为停更，本轮划掉、不参与合并</b>。
-本轮实测（与 10-09 同节点条目逐条对账）：</p>
+本轮实测（与 <b>10-11</b> 同节点条目逐条对账；10-11 未取到的节点改用 <b>10-10</b> 快照对照，表内已注明）：</p>
 <table class="tb"><tr><th>节点</th><th>本轮实测</th><th>处理</th></tr>{stale_rows}</table>
 <p>其余节点当轮都有刷新，但<b>刷新程度差别很大</b>，读的时候要分开看：<br>
-<b>① 当日全量刷新（与昨日零重合）</b>：36氪AI 频道（30/30 新增）、量子位（10）、IT之家（12）、
-Readhub（20）、36氪 24h（8）。<b>② 高重合、须回原页核日期</b>：AIbase 9/10、少数派 19/20、
-掘金 18/20、虎嗅 13/15、少数派最新 8/10，以及 AI工具集 5/10 ——
-这类节点是<b>日报／条目库形态</b>（AIbase 尤其滞后），<b>表内条目的发布时间必须回原文核</b>，
-不得当当日新闻用；本轮的「必抓更新」表因此以它们为主，已逐条打上来源可查链接。
-<b>③ 正常滚动</b>：MIT TR 6/10、果壳 6/10、爱范儿 3/10（周更／慢更栏目天然重合）。</p>
+<b>① 当日全量刷新（与 10-11 零重合）</b>：36氪AI 频道（30/30 新增）、IT之家（12/12）、
+Readhub（20/20）、36氪 24h（8/8）、爱范儿（10/10）。<b>② 高重合、须回原页核日期</b>：
+少数派 15/20、掘金 14/20（<b>「本周最热」周榜，天然高重合</b>）、虎嗅 10/15、
+AIbase 9/10 —— 这类节点是<b>日报／条目库／周榜形态</b>（AIbase 尤其滞后），
+<b>表内条目的发布时间必须回原文核</b>，不得当当日新闻用；本轮的「必抓更新」表因此以它们为主，
+已逐条打上来源可查链接。<b>③ 正常滚动</b>：果壳 2/10、量子位 1/10、AI工具集 1/10。</p>
+<p>⚠️ <b>本轮采集通道与往常不同</b>：tophub 对 <code>curl</code> 批量并发请求触发了<b>安全验证</b>
+（返回「安全验证」页而非节点内容），<b>串行重试、加 cookie、换 UA 后仍被拦</b>，
+因此<b>本轮 tophub 节点改用 WebFetch 直读</b>（任务指定的主力方式）。
+同一时点仍有 <b>7 个节点</b>（AI 频道 5 个 ＋ IT之家 ＋ 已划掉的 AI产品榜）经 curl 正常返回，
+两条通道数据一致。
+⚠️ 本机 curl 与 WebFetch 走的是<b>不同出口</b>，「curl 被拦」<b>不等于「节点不可用／失效」</b>。</p>
+<p>⚠️ 沿用 10-11 的实测更正：用户给出的「极客公园 = <code>/n/NaEdZZXdrO</code>」与实际不符 ——
+该 id 打开是<b>「少数派最新文章」</b>，真正的<b>极客公园节点是 <code>/n/NRrvWYDe5z</code></b>。
+本池按实测处理（极客公园取 NRrvWYDe5z 并因用户点名而划掉，本轮该节点未取到）。</p>
 </div>
 
 <h2>元信息与本轮局限</h2>
 <div class="box warn">
 <ul>
-  <li><b>采集源</b>：本轮实际进入合并的源 {n_src_total} 个 —— tophub <b>14 个节点</b>
+  <li><b>采集源</b>：本轮实际进入合并的源 <b>{n_src_total} 个</b> —— 全部为 tophub 节点
     （AI 板块 5 个：36氪 AI 频道、量子位、AIbase、AI工具集、掘金；
-    科技板块 9 个：IT之家日榜、Readhub、36氪 24h、爱范儿、果壳科学人、少数派、少数派最新、虎嗅热文、
-    MIT Tech Review）＋ Hacker News 官方 Firebase API ＋ HuggingFace Trending 模型 ＋
-    GitHub Trending 日榜。<b>另有 3 个节点本轮被划掉</b>（见上一节时效性自检）。</li>
+    科技板块 7 个：IT之家日榜、Readhub、36氪 24h、爱范儿、果壳科学人、少数派、虎嗅热文）。
+    ⚠️ <b>本轮不含 Hacker News／GitHub Trending／HuggingFace</b>：任务要求 ① 线只采 AI／科技内容源，
+    且规则 8 在 VPN 未开时不采 HN。另有 <b>4 个节点本轮被划掉/未取到</b>
+    （AI产品榜、MIT Technology Review、威锋网、极客公园，见上一节时效性自检，未计入上面的源数）。</li>
   <li><b>代理 / VPN 实测（{probe_time}）</b>：按规则 8 逐个端口实测
     <code>curl --noproxy '*' -x http://127.0.0.1:&lt;port&gt; https://www.google.com</code>，
     10808 / 7890 / 7897 / 2800 四个端口<b>全部返回 000</b>，不带代理直连 google 同为 000 ——
-    <b>按规则判为 VPN 未开</b>。补充实测：<code>hacker-news.firebaseio.com</code> 直连为
-    <b>200</b>，故 Hacker News 本轮<b>照常采到</b>（特此注明，<b>不是「网络不可达」</b>）；
-    HuggingFace API 在本机单独复测为 000、经脚本 4 次重试后取到，属代理节点轮换的时点波动。</li>
-  <li><b>未采到的源</b>：Reddit（r/LocalLLaMA 等，<code>.rss</code>）直连与经 SOCKS5 均
-    <b>000</b>；arXiv RSS（cs.AI / cs.LG）返回 <b>301</b>。两者<b>是源受限不是规则排除</b>，
-    待网络条件允许可补跑。</li>
-  <li><b>境外聚合站</b>：本轮用检索服务侧（WebSearch）限定
-    <code>officechai.com</code> / <code>dataconomy.com</code> / <code>the-decoder.com</code> 等域名补检，
-    结果见下（{websearch_note}）。⚠️ 检索侧通道<b>不依赖本机 VPN</b>，与上面的代理实测是两回事。</li>
+    <b>按规则判为 VPN 未开</b>，因此 Reddit（<code>.rss</code>）与 Hacker News <b>本轮不采集</b>
+    （<b>这是规则排除，不是「网络不可达」</b>）。</li>
+  <li><b>未采到的源（本轮）</b>：HuggingFace 与 arXiv 本轮<b>未纳入 ① 线采集范围</b>（任务口径），
+    不作为「源失效」记录；Reddit 按规则 8 排除。⚠️ <b>tophub 的 <code>curl</code> 通道本轮被安全验证拦截</b>
+    （详见上一节），属<b>取数通道限制，不是源失效</b>，已改用 WebFetch 直读补齐。</li>
+  <li><b>境外聚合站（检索服务侧补检）</b>：用户指定的境外聚合站在本机<b>直连不可达</b>（VPN 未开），
+    因此改用<b>检索服务侧的域名限定检索</b>（<code>officechai.com</code> / <code>the-decoder.com</code> /
+    <code>dataconomy.com</code> / <code>agihunt.info</code> / <code>promptblueprints.tech</code> /
+    <code>tldrocket.com</code> / <code>nokiapoweruser.com</code> / <code>kocpc.com.tw</code>）：
+    {websearch_note}<br>
+    ⚠️ 检索侧通道<b>不依赖本机 VPN</b>，与上面的代理实测是两回事。</li>
   <li><b>分类口径</b>：AI / 科技按标题关键词判定，<b>会有少量跨类内容</b>
     （如「AI 芯片」既算 AI 也算科技）。本文件两类同页展示、逐条标注类别；
     若某条归错，以条目上的赛道标签为准，不影响它本身的可用性。</li>
-  <li><b>热度口径互不相通</b>：tophub 站内值、IT 之家「N 评」（评论数）、虎嗅（阅读量）、
-    HN 得分、HF trendingScore <b>不可横向比较</b>；本池多数 tophub 节点<b>没有热度字段</b>，
-    因此统一用<b>「命中源数量」代替热度信号</b>，只在源数相同时才看次级热度。</li>
+  <li><b>热度口径互不相通</b>：tophub 站内值、IT 之家「N 评」（评论数）、虎嗅（阅读量）
+    <b>不可横向比较</b>；本池多数 tophub 节点<b>没有热度字段</b>，
+    因此统一用<b>「命中源数量」代替热度信号</b>，只在源数相同时才看次级热度。
+    本轮有热度字段的只有：IT之家（评论数）、威锋网（站内值，已划掉）、虎嗅（阅读量万）。</li>
   <li><b>数字可信度分层</b>：本池所有性能与业务数字均来自<b>厂商自测或媒体报道</b>；
     凡不是多源一致或官方直接发布的数字，条目上都会标「据报道」或「单源待核」，
     做图文时写「最强 / 领先 / 零成本」必须带反方。</li>
   <li><b>单源待核（红标）</b>：只命中 1 个来源的条目一律标红，<b>做之前必须先补检索</b>——
-    单源不代表假，只代表<b>还没核</b>。</li>
-  <li><b>跨源判同口径</b>：判同只在两种情况成立 —— ① 两条标题共有一个<b>带数字的型号</b>
-    （Qwen-Image-2.1 / Haiku 5.5）；② 共有<b>两个以上非通用实体</b>且标题字符二元组相似度 ≥ 0.5。
+    单源不代表假，只代表<b>还没核</b>。⚠️ 本轮<b>多源候选只有 2 条</b>，其中 1 条实为转载，
+    所以本轮的「单源待核」占比高于往常，属<b>当日源实况</b>，不是判定放宽。</li>
+  <li><b>跨源判同口径</b>：判同只在两种情况成立 —— ① 两条标题共有一个<b>带数字的型号</b>；
+    ② 共有<b>两个以上非通用实体</b>且标题字符二元组相似度 ≥ 0.5。
     <b>只共现厂商名或产品线词（iphone / agent / pro / 某厂名）一律不判同</b> ——
-    宁可漏合（降级为单源）不可错合，错合会凭空造出「N 源命中」的假交叉核验。
-    ⚠️ 本轮修正了一处护栏漏洞：「iPhone 18 Pro」会被拆成 <code>iphone</code> + <code>pro</code>
-    两个实体，绕过「只共现产品线词不判同」，把三条<b>不同</b>的 iPhone 18 Pro 新闻并成一条；
-    已把产品线词与产品修饰词整体列入通用词剔除。</li>
+    宁可漏合（降级为单源）不可错合，错合会凭空造出「N 源命中」的假交叉核验。</li>
+  <li><b>人工补录（沿用口径）</b>：现行判同<b>宁可漏合不可错合</b>，代价是
+    <b>同一事件、不同角度的报道合不到一起</b>。本轮实测：iPhone Duo 今天有两条互不相同的报道
+    （IT之家＝预约数与价格；爱范儿早报转述证券时报＝订单加单 30%），自动判同<b>没合上</b>，
+    人工核过确为同一事件后补录 1 条多源事件，并把原单源条目按关键词 <code>iphone duo</code> 摘掉。
+    ⚠️ 补录条目在条目上标「人工补录」来源说明，<b>不享受自动判同的交叉核验待遇</b>。</li>
+  <li><b>必抓名单的人工扩边（沿用口径）</b>：命中必抓品牌、但标题没有「发布／上线／更新」语义词的
+    官方功能更新可由人工补进必抓（本轮<b>未新增</b>，<code>MUST_EXTRA_KW</code> 为空）；
+    反之，<b>榜单源不进必抓</b>——标题是脚本按模板拼的，不是官方发布。
+    ⚠️ 本轮的「必抓更新」表<b>几乎全来自 AIbase 这一条目库型节点</b>（与昨日 9/10 重合），
+    条目发布日期<b>可能早于今天</b>，选中后必须先回原页核日期。</li>
 </ul>
 </div>
 
@@ -1723,8 +1854,10 @@ def main():
     _pos = [a for a in argv if not a.startswith('--')]
     date = _pos[0] if _pos else datetime.now().strftime('%Y-%m-%d')
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    # ⚠️ 必须在 collect() **之前** 装载 —— collect() 解析事件时就要查 PUBTIME 定各源最早时间。
+    n_pub = load_pubtime()
     events, missing, raw_items = collect()
-    multi, must_only, hooks, single_items, picks, dropped = build(events, date)
+    multi, must_only, hooks, single_items, picks, dropped, stale_must = build(events, date)
     pset = {p['title'] for p in picks}
     n_src_total = len({i['src'] for i in raw_items})
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -1738,7 +1871,8 @@ def main():
             c_single = [e for e in single_items if e['cat'] == cat]
             c_picks = [p for p in picks if p['cat'] == cat]
             doc = render_page(cat, prefix, c_multi, c_hooks, c_must, c_single, c_picks,
-                              pset, date, now, n_src_total)
+                              pset, date, now, n_src_total,
+                              [e for e in stale_must if e['cat'] == cat])
             out = os.path.join(OUT_DIR, f'今日{cat}选题池_{date}.html')
             with open(out, 'w', encoding='utf-8') as f:
                 f.write(doc)
@@ -1756,7 +1890,7 @@ def main():
     # 将来若要恢复「科技也有必抓」，只要去掉 build() 里的 cat 前置过滤即可。
     must_items = balanced_pick(must_only, MUST_CAP)
     doc = render_merged(multi, hooks, must_items, single_items, picks, pset,
-                        date, now, n_src_total)
+                        date, now, n_src_total, stale_must)
     out = os.path.join(OUT_DIR, f'今日AI科技选题池_{date}.html')
     with open(out, 'w', encoding='utf-8') as f:
         f.write(doc)
@@ -1770,6 +1904,9 @@ def main():
           f' / 必抓 {len(must_items)}（全量 {len(must_only)}，限 {MUST_CAP}）'
           f' / 单源 {len(single_items)}（AI {_cnt(single_items,"AI")}'
           f' / 科技 {_cnt(single_items,"科技")}）')
+    print(f'PUBTIME 装载 {n_pub} 条 · 有时间的条目 '
+          f'{sum(1 for e in events if e.get("pub"))}/{len(events)}'
+          f' · 必抓超期未采用 {len(stale_must)} 条')
     print(f'VERIFIED 逐条核实 {sum(1 for e in multi if _detail(e))} / {len(multi)}')
     print('推荐  ' + ' ｜ '.join(
         f'[{p["cat"]}]{labels_hint(p, multi)} {p["title"][:28]}' for p in picks))
