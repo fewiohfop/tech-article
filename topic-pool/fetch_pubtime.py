@@ -11,10 +11,23 @@
    同一时刻抓 4 条不同文章，取到的值完全相同（实测）。必须改用页内 JSON
    里的 publishTime（毫秒，每条不同）。所以**站点专用规则优先于通用规则**。
 
+⚠️ AIbase（2026-10-12 二次修正，前一次判断错了）：
+   池内 AIbase 条目全是「AI日报」页（`/zh/daily/<编号>`）。**这些是永久链接**，
+   各家标题各不相同（实测 31235 / 31542 的 h1 完全不一样），不是同一个页面。
+   但**日报页正文里的条目时间全部渲染成「今天」**（31235 是 9-21 那期，
+   页内 10 条却都写 2026年10月12号 9:05–10:29）→ 页内时间不可信，不能用。
+   ✅ 可靠来源是**日报列表页** `https://www.aibase.com/zh/daily`：每张卡是
+   `href="/daily/<编号>"` → `2026年10月10号 16:00` → 标题，可直接配出
+   「编号 → 该期真实日期」。实测 31235 = 9-21（距今 21 天）、31508 = 10-09。
+   ⚠️ 这解释了用户最初的抱怨：「必抓」里混着很旧的新闻 —— 池内 16 条必抓里
+   有 14 条唯一来源就是这些日报，最老的 21 天，而旧实现把它们的日期标成
+   「未取到」→ 时间窗 fail-open → 全部留在表里。所以**必须按编号取真实日期**。
+
 用法：python fetch_pubtime.py
 输入：tophub_items.json + hn_items.json
 输出：pubtime.json  {url: {"day": "2026-10-11", "iso": ..., "src": ...}}
 缓存：_pubtime_cache.json（同一 URL 不重复抓；失败的不写缓存，下次重试）
+      _aibase_dates.json（编号 → 日期，只增不减，跨天累积）
 """
 import io
 import json
@@ -40,11 +53,16 @@ SITE_RULES = [
 ]
 
 # ---- 故意不取时间的站 ----
-# ⚠️ AIbase（aibase.com）：链接是「AI日报」聚合页，**一页里多条新闻各带自己的时间**，
-#    而池子里的标题是从日报标题（「AI日报：A；B；C」）拆出来的 → 用「页面第一个日期」
-#    会给所有条目安上同一个假时间。实测还发现旧编号页会滚动成当日最新内容，
-#    页面标题与正文已经对不上。这种宁可标「未取到」，也不能给错误时间。
-NO_TIME_HOSTS = ['aibase.com']
+# ⚠️ 这里只放「页面级时间确实不可信、且没有可靠替代来源」的站。
+#    AIbase 曾列在这里，2026-10-12 已改为走**日报列表页映射**取真实日期（见 AIBASE_*）。
+NO_TIME_HOSTS = []
+
+# ---- AIbase 日报：编号 → 日期（必须走列表页，不能用日报页正文时间）----
+AIBASE_INDEX = 'https://www.aibase.com/zh/daily'
+AIBASE_RE = re.compile(r'aibase\.com/(?:[a-z]{2}/)?daily/(\d+)')
+# ⚠️ 列表页里的链接是**相对路径**（`href="/daily/31542"`），不能复用上面的带域名正则
+AIBASE_IDX_RE = re.compile(r'href="(?:https?://[^"]*?)?/daily/(\d+)"')
+AIBASE_DATES = {}          # {'31235': {'day','iso','epoch','src'}}
 
 # ---- 通用兜底 ----
 GENERIC = [
@@ -135,6 +153,38 @@ def extract(url, html, now):
     return None
 
 
+def fetch_aibase_map():
+    """抓 AIbase 日报**列表页**，配出「编号 → 该期真实日期」。
+
+    结构（实测）：每张卡为 `<a href="/daily/31235">` …（约 1.5KB 内）
+    `2026年9月21号 16:00` … `<h3>标题</h3>` —— href 在前、日期紧随其后，
+    按出现顺序配对即可。返回新解出的 {id: meta}；一个都没解到返回 {}（不覆盖旧缓存）。
+    """
+    html = fetch(AIBASE_INDEX)
+    if not html:
+        return {}
+    out = {}
+    pos = [m for m in AIBASE_IDX_RE.finditer(html)]
+    for m in pos:
+        i = m.group(1)
+        if i in out:
+            continue
+        # 日期紧跟在该 href 之后
+        tail = html[m.end():m.end() + 2000]
+        d = re.search(r'(20\d{2})年(\d{1,2})月(\d{1,2})[号日]\s*(\d{1,2}):(\d{2})', tail)
+        if not d:
+            continue
+        try:
+            dt = datetime(int(d.group(1)), int(d.group(2)), int(d.group(3)),
+                          int(d.group(4)), int(d.group(5)), tzinfo=CST)
+        except Exception:
+            continue
+        if dt > NOW + timedelta(days=2) or dt < datetime(2024, 1, 1, tzinfo=CST):
+            continue
+        out[i] = _mk(dt, 'aibase_index')
+    return out
+
+
 def probe(item):
     url = item['url']
     low = url.lower()
@@ -142,6 +192,13 @@ def probe(item):
         return url, {'note': '榜单页无发布时间'}
     if any(h in low for h in NO_TIME_HOSTS):
         return url, {'note': '聚合页，时间不可信 → 不取'}
+    # AIbase 日报：只认列表页映射出来的日期，**绝不用日报页正文时间**（那是「今天」）
+    m = AIBASE_RE.search(low)
+    if m:
+        v = AIBASE_DATES.get(m.group(1))
+        if v:
+            return url, dict(v)
+        return url, {'note': 'AIbase 日报：编号不在列表页映射内 → 未取到'}
     html = fetch(url)
     if html is None:
         return url, None
@@ -161,6 +218,28 @@ def main():
     p2 = os.path.join(HERE, 'hn_items.json')
     if os.path.exists(p2):
         items += json.load(io.open(p2, encoding='utf-8'))
+
+    # ---- AIbase 日报：先读历史映射（只增不减），再抓列表页补新编号 ----
+    ab_p = os.path.join(HERE, '_aibase_dates.json')
+    if os.path.exists(ab_p):
+        try:
+            AIBASE_DATES.update(json.load(io.open(ab_p, encoding='utf-8')))
+        except Exception:
+            pass
+    _ab_before = len(AIBASE_DATES)
+    _ab_new = fetch_aibase_map()
+    AIBASE_DATES.update(_ab_new)
+    _ab_ids = {m.group(1) for m in (AIBASE_RE.search(i['url'].lower())
+                                    for i in items) if m}
+    _ab_hit = sum(1 for i in _ab_ids if i in AIBASE_DATES)
+    json.dump(AIBASE_DATES, io.open(ab_p, 'w', encoding='utf-8'),
+              ensure_ascii=False, indent=1, sort_keys=True)
+    print('AIbase 日报编号 %d 个（列表页新解 %d，历史累计 %d，命中 %d）'
+          % (len(_ab_ids), len(_ab_new), len(AIBASE_DATES), _ab_hit))
+    for _i in sorted(_ab_ids, key=int):
+        _v = AIBASE_DATES.get(_i)
+        print('   %s %s' % (_i, (_v['day'] + ' ' + _v['iso'][11:16]) if _v
+                            else '❌ 未映射到日期'))
 
     # HN 自带 time（Unix 秒，UTC），不必抓页面
     hn_map = {}
