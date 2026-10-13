@@ -144,6 +144,21 @@ def main():
             for l in hits:
                 print("  " + l)
 
+    # ---- 出图前清掉输出目录里的旧 PNG ----
+    # 改版后页数/页名会变，新图不会覆盖旧图，旧图就一直躺在 out_xhs/out_dy 里，
+    # 之后交付/填充时会一起被当成成品（2026-10-13 踩过：成品目录混进 4 张上一版，
+    # 两条内容各多出 2 张，直接发就会把旧页面发出去）。
+    # 只删 .png；HTML / meta 等不在这里。
+    for _spec, outdir in specs:
+        od = os.path.join(d, outdir)
+        if not os.path.isdir(od):
+            continue
+        stale = [f for f in os.listdir(od) if f.lower().endswith(".png")]
+        for f in stale:
+            os.remove(os.path.join(od, f))
+        if stale and not args.quiet:
+            print("  ↳ %s: 出图前清理旧图 %d 张" % (outdir, len(stale)))
+
     report = os.path.join(d, "_measure.json")
     cmd = [NODE, RENDER2] + jobs + ["--scale", "2", "--report", report]
     if not args.no_autogap:

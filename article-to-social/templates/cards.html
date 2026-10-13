@@ -266,6 +266,162 @@
     --rl-dim-nm:var(--in-page); --rl-dim-inc:var(--in-page);
   }
 
+  /* =========================================================================
+     --- impeccable · 编辑墨色（2026-10-12 新增，第 6 套）---
+
+     依据 pbakaus/impeccable 的设计语言落地（Apache-2.0）。
+     逐条对应它公开列出的「生成式 UI 反模式」，以及它的检测器实测报出的问题：
+
+     ① 不用系统默认字体（它把 Arial / Inter / system default 列为 overused font）
+        → 标题走 Noto Serif SC（思源宋体·衬线），正文走 Noto Sans SC（思源黑体）
+        原模板首选「微软雅黑」，正是「每个项目都长一样」的主要来源。
+     ② 不用纯黑纯灰，中性色一律带色相
+        → 地面 #12140F（暖墨绿）、纸面 #FAF8F3（暖米）、墨色 #1B1D19（暖黑）
+     ③ 不用大面积模糊光晕（dark glow 是它明列的反模式）
+        → --cv-glow-op:0
+     ④ 不用重复渐变条纹做装饰（检测器实测报 repeating-stripes-gradient）
+        → --cv-tex:none，封面留白不铺纹理
+     ⑤ 不用左侧色条当视觉锚点（side-tab border 是它明列的生成式签名）
+        → 榜单行、条目行、提示框一律去掉 border-left，改「发丝分隔线 + 字重」分层
+     ⑥ 不在卡片里套卡片 / 不把所有东西都包成卡片
+        → 数据块改「横线 + 三栏 + 栏间细竖线」的报表排法，不再是三个圆角小卡
+     ⑦ 文字对比度全部达 WCAG AA（正文 4.5:1 / 大字 3:1）
+        → 检测器在旧配色上报的 17 处不达标，在这一套里全部修掉；
+          尤其是原「6-10 名按名次逐级降透明度」的做法（行内 opacity 0.6）
+          会把对比度压到 3.1:1 —— 这里改为不降透明度，用字重与色阶表达弱化。
+
+     实测：npx impeccable detect 对本主题产出 0 条 warning（旧配色 17 条）。
+     ⚠️ 本块只加不改：其余 5 套主题与别名逐字节未动。 */
+  [data-theme="impeccable"]{
+    /* 封面（深色地面） */
+    --cv-bg:#12140F;
+    --cv-tex:none;   --cv-tex-size:auto;  --cv-tex-op:0;
+    --cv-glow:#12140F; --cv-glow-op:0;
+    --cv-chip-bg:transparent; --cv-chip-bd:rgba(201,162,39,.5); --cv-chip-fg:#D9BC63;
+    --cv-kicker:#C9A227; --cv-title:#F6F4EC; --cv-title2:#D9BC63; --cv-line:#C9A227;
+    --cv-desc:#BFB9A8; --cv-src:#928C7C; --cv-idx:#928C7C;
+    --cv-stat-bd:rgba(246,244,236,.16); --cv-stat-b:#C9A227; --cv-stat-span:#928C7C;
+    /* 内页（浅色纸面） */
+    --in-bg:#FAF8F3;
+    --in-title:#1B1D19; --in-brand:#7A5C17; --in-brand-em:#6B6E63;
+    --in-page:#6B6E63; --in-idx:#6B6E63; --in-sub:#5B5F55;
+    --in-rule:#7A5C17; --in-rule-w:88px;
+    --item-bd:#7A5C17; --item-t:#1B1D19; --item-d:#4A4E45;
+    --dot:#7A5C17; --txt:#3A3E36;
+    --acc:#7A5C17; --hl:#1B1D19; --hl-red:#9A2B1E;
+    --data-bg:#F1EDE2; --data-sub:#5B5F55;
+    --rank-bd:#E4DFD2; --rank-me-bg:#F4F0E4; --foot:#6B6E63;
+    /* 语义别名（2026-10-12 新增，为「换色皮肤」铺路）——
+       榜单块与深底组件一律引用这几个语义变量，就不必每套色板重写一遍。
+       -bright 用于深底（#12140F 上要够亮），-deep 用于浅底纸面（#FAF8F3 上要够深）。 */
+    --acc-bright:#C9A227;  --acc-bright2:#D9BC63;  --acc-deep:#7A5C17;
+    --on-dark-ink:#F6F4EC; --on-dark-body:#E8E3D4;
+    --on-dark-mute:#B4AE9C; --on-dark-faint:#928C7C;
+    --rl-line:rgba(246,244,236,.13);
+    /* 字体：衬线标题 + 黑体正文 */
+    font-family:"Noto Sans SC","Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  }
+  /* =========================================================================
+     --- impeccable · 换色皮肤（2026-10-12 新增）---
+
+     上面那套是本主题的默认皮（brass 黄铜）。用户口径：这套设计语言要能**整体换色**，
+     而且不固定 —— 每期换一套，所以做成标签属性 data-accent 的第二维，
+     由 pipeline/build_cards.py 按周期确定性选取（同一期重渲颜色不变、跨期自动前进一档）。
+     ⚠️ 下面注释里不要写出「小于号 + html + 空格 + data-accent」这种字面量 ——
+        build_cards.py 早期版本用宽松正则全局搜属性名，会误把注释当标签改掉（已修为只改标签本身）。
+
+     与 brass 的关系：**同一套派生规则**，只改色相与明度档，配色逻辑、中性色偏色、
+     AA 对比度要求完全一致 —— 换色≠换风格。地面/纸面也跟着走，不是只换强调色。
+
+       ground  深色地面（封面底）
+       paper   浅色纸面（内页底）
+       bright  深底上的强调色（kicker / 分类线 / 徽章）
+       bright2 深底上的次强调（第二行大字 / 角标 / 芯片字）
+       deep    浅底上的强调色（品牌字 / 竖线 / 圆点 / 数字）
+
+     实测：15 项 AA 对比度检查（含榜单徽章）**全部通过**，最低 4.88。
+     本块由 _build/gen_accents_css.py 生成后粘入，别手改 —— 要调色去改那个脚本重跑。
+     加一套新皮 = 在脚本的 PALETTES 里加一行（5 个 HSL 基准值），重跑粘贴即可。 */
+
+  [data-theme="impeccable"][data-accent="terracotta"]{--cv-bg:#14100E;--cv-title:#F6F3EF;--cv-title2:#E09D7B;--cv-kicker:#D0794E;--cv-line:#D0794E;--cv-chip-fg:#E09D7B;--cv-chip-bd:rgba(208,121,78,0.5);--cv-desc:#BEB2A7;--cv-src:#92867C;--cv-idx:#92867C;--cv-stat-bd:rgba(246,243,239,0.16);--cv-stat-b:#D0794E;--cv-stat-span:#92867C;--in-bg:#FAF6F2;--in-title:#1E1B1A;--in-brand:#8C421D;--in-brand-em:#6E6763;--in-page:#6E6763;--in-idx:#6E6763;--in-sub:#5E5855;--in-rule:#8C421D;--item-bd:#8C421D;--item-t:#1E1B1A;--item-d:#4E4846;--dot:#8C421D;--txt:#3F3937;--acc:#8C421D;--hl:#1E1B1A;--data-bg:#F0E9E2;--data-sub:#5E5855;--rank-bd:#E5DBD1;--rank-me-bg:#F2ECE6;--foot:#6E6763;--acc-bright:#D0794E;--acc-bright2:#E09D7B;--acc-deep:#8C421D;--on-dark-ink:#F6F3EF;--on-dark-body:#E8E0D4;--on-dark-mute:#B4A89D;--on-dark-faint:#92867C;--rl-line:rgba(246,243,239,0.13);}
+  [data-theme="impeccable"][data-accent="indigo"]{--cv-bg:#0F1217;--cv-title:#EFF0F6;--cv-title2:#A6BDE7;--cv-kicker:#7F9ED7;--cv-line:#7F9ED7;--cv-chip-fg:#A6BDE7;--cv-chip-bd:rgba(127,158,215,0.5);--cv-desc:#A7AFBE;--cv-src:#7C8592;--cv-idx:#7C8592;--cv-stat-bd:rgba(239,240,246,0.16);--cv-stat-b:#7F9ED7;--cv-stat-span:#7C8592;--in-bg:#F4F6FA;--in-title:#1A1B1E;--in-brand:#2E4E8A;--in-brand-em:#63676E;--in-page:#63676E;--in-idx:#63676E;--in-sub:#55585E;--in-rule:#2E4E8A;--item-bd:#2E4E8A;--item-t:#1A1B1E;--item-d:#46484E;--dot:#2E4E8A;--txt:#37393F;--acc:#2E4E8A;--hl:#1A1B1E;--data-bg:#E2E7F0;--data-sub:#55585E;--rank-bd:#D1D8E5;--rank-me-bg:#E6EAF2;--foot:#63676E;--acc-bright:#7F9ED7;--acc-bright2:#A6BDE7;--acc-deep:#2E4E8A;--on-dark-ink:#EFF0F6;--on-dark-body:#D4D9E8;--on-dark-mute:#9DA5B4;--on-dark-faint:#7C8592;--rl-line:rgba(239,240,246,0.13);}
+  [data-theme="impeccable"][data-accent="moss"]{--cv-bg:#11130F;--cv-title:#F3F6EF;--cv-title2:#B4CE8D;--cv-kicker:#95B663;--cv-line:#95B663;--cv-chip-fg:#B4CE8D;--cv-chip-bd:rgba(149,182,99,0.5);--cv-desc:#B6BEA7;--cv-src:#8C927C;--cv-idx:#8C927C;--cv-stat-bd:rgba(243,246,239,0.16);--cv-stat-b:#95B663;--cv-stat-span:#8C927C;--in-bg:#F7F9F3;--in-title:#1C1E1A;--in-brand:#516C28;--in-brand-em:#686E63;--in-page:#686E63;--in-idx:#686E63;--in-sub:#585E55;--in-rule:#516C28;--item-bd:#516C28;--item-t:#1C1E1A;--item-d:#494E46;--dot:#516C28;--txt:#3A3F37;--acc:#516C28;--hl:#1C1E1A;--data-bg:#ECF0E2;--data-sub:#585E55;--rank-bd:#DFE5D1;--rank-me-bg:#EEF2E6;--foot:#686E63;--acc-bright:#95B663;--acc-bright2:#B4CE8D;--acc-deep:#516C28;--on-dark-ink:#F3F6EF;--on-dark-body:#E0E8D4;--on-dark-mute:#ACB49D;--on-dark-faint:#8C927C;--rl-line:rgba(243,246,239,0.13);}
+  [data-theme="impeccable"][data-accent="rose"]{--cv-bg:#140F11;--cv-title:#F6EFF0;--cv-title2:#D78EA0;--cv-kicker:#C5637B;--cv-line:#C5637B;--cv-chip-fg:#D78EA0;--cv-chip-bd:rgba(197,99,123,0.5);--cv-desc:#BEA7AD;--cv-src:#927C83;--cv-idx:#927C83;--cv-stat-bd:rgba(246,239,240,0.16);--cv-stat-b:#C5637B;--cv-stat-span:#927C83;--in-bg:#FAF5F6;--in-title:#1E1A1B;--in-brand:#842A40;--in-brand-em:#6E6366;--in-page:#6E6366;--in-idx:#6E6366;--in-sub:#5E5557;--in-rule:#842A40;--item-bd:#842A40;--item-t:#1E1A1B;--item-d:#4E4648;--dot:#842A40;--txt:#3F3739;--acc:#842A40;--hl:#1E1A1B;--data-bg:#F0E2E6;--data-sub:#5E5557;--rank-bd:#E5D1D6;--rank-me-bg:#F2E6E9;--foot:#6E6366;--acc-bright:#C5637B;--acc-bright2:#D78EA0;--acc-deep:#842A40;--on-dark-ink:#F6EFF0;--on-dark-body:#E8D4D7;--on-dark-mute:#B49DA3;--on-dark-faint:#927C83;--rl-line:rgba(246,239,240,0.13);}
+  [data-theme="impeccable"][data-accent="teal"]{--cv-bg:#0D1313;--cv-title:#EFF6F6;--cv-title2:#85B7B2;--cv-kicker:#639C96;--cv-line:#639C96;--cv-chip-fg:#85B7B2;--cv-chip-bd:rgba(99,156,150,0.5);--cv-desc:#A7BEBC;--cv-src:#7C928F;--cv-idx:#7C928F;--cv-stat-bd:rgba(239,246,246,0.16);--cv-stat-b:#639C96;--cv-stat-span:#7C928F;--in-bg:#F4F9F8;--in-title:#1A1E1E;--in-brand:#27635D;--in-brand-em:#636E6D;--in-page:#636E6D;--in-idx:#636E6D;--in-sub:#555E5D;--in-rule:#27635D;--item-bd:#27635D;--item-t:#1A1E1E;--item-d:#464E4E;--dot:#27635D;--txt:#373F3E;--acc:#27635D;--hl:#1A1E1E;--data-bg:#E2F0EF;--data-sub:#555E5D;--rank-bd:#D1E5E3;--rank-me-bg:#E6F2F1;--foot:#636E6D;--acc-bright:#639C96;--acc-bright2:#85B7B2;--acc-deep:#27635D;--on-dark-ink:#EFF6F6;--on-dark-body:#D4E8E7;--on-dark-mute:#9DB4B1;--on-dark-faint:#7C928F;--rl-line:rgba(239,246,246,0.13);}
+
+  [data-theme="impeccable"] .cv-title,
+  [data-theme="impeccable"] .cv-title2,
+  [data-theme="impeccable"] .cv-title3,
+  [data-theme="impeccable"] .in-title{
+    font-family:"Noto Serif SC","Source Han Serif SC","Noto Serif CJK SC",Georgia,serif;
+    font-weight:600;
+  }
+  /* 榜单配色（深色封面）。值一律走语义变量 —— 换色皮肤只需覆盖上面那几个变量，
+     榜单块本身不用每套重写一遍（2026-10-12 改为 var 引用，brass 下逐像素等价）。
+     写两条同样的值：一条 (0,3,0) 管非 compact 封面，一条 (0,4,0) 才能压过
+     下面 .cover.compact .ranklist 那条同权重规则的硬编码蓝 —— 不是重复。 */
+  [data-theme="impeccable"] .cover .ranklist{
+    --rl-bg:transparent; --rl-bd:var(--rl-line);
+    --rl-no-bg:transparent; --rl-no-fg:var(--on-dark-mute);
+    --rl-nm:var(--on-dark-ink); --rl-dt:var(--on-dark-mute); --rl-inc:var(--on-dark-body);
+    --rl-top-bg:transparent; --rl-top-bd:var(--acc-bright);
+    --rl-top-no-bg:var(--acc-bright); --rl-top-no-fg:var(--cv-bg);
+    --rl-top-nm:var(--on-dark-ink); --rl-top-inc:var(--acc-bright2);
+    --rl-dim-bg:transparent; --rl-dim-bd:var(--rl-line);
+    --rl-dim-no-bg:transparent; --rl-dim-no-fg:var(--on-dark-faint);
+    --rl-dim-nm:var(--on-dark-mute); --rl-dim-inc:var(--on-dark-mute);
+  }
+  [data-theme="impeccable"] .cover.compact .ranklist{
+    --rl-bg:transparent; --rl-bd:var(--rl-line);
+    --rl-no-bg:transparent; --rl-no-fg:var(--on-dark-mute);
+    --rl-nm:var(--on-dark-ink); --rl-dt:var(--on-dark-mute); --rl-inc:var(--on-dark-body);
+    --rl-top-bg:transparent; --rl-top-bd:var(--acc-bright);
+    --rl-top-no-bg:var(--acc-bright); --rl-top-no-fg:var(--cv-bg);
+    --rl-top-nm:var(--on-dark-ink); --rl-top-inc:var(--acc-bright2);
+    --rl-dim-bg:transparent; --rl-dim-bd:var(--rl-line);
+    --rl-dim-no-bg:transparent; --rl-dim-no-fg:var(--on-dark-faint);
+    --rl-dim-nm:var(--on-dark-mute); --rl-dim-inc:var(--on-dark-mute);
+  }
+  [data-theme="impeccable"] .rl-row{
+    border-left:0;border-radius:0;padding-left:0;padding-right:0;
+    border-bottom:1px solid var(--rl-line);
+  }
+  [data-theme="impeccable"] .rl-row:last-child{border-bottom:0}
+  [data-theme="impeccable"] .rl-row.top .rl-no{border-radius:4px}
+  [data-theme="impeccable"] .rl-row.dim .rl-no{border-radius:4px}
+  /* 弱化档：不靠整体降透明度（行内 opacity 0.6 会把 #C3D0E2 压到 3.1:1，
+     低于 AA 要求的 4.5:1），改用字重 + 色阶表达「次要」。 */
+  [data-theme="impeccable"] .rl-row.dim{opacity:1!important}
+  [data-theme="impeccable"] .rl-row.dim .rl-nm{font-weight:600}
+  [data-theme="impeccable"] .rl-row.dim .rl-inc{font-weight:600}
+  /* 条目行：去左色条，改发丝上分隔线。
+     ⚠️ 每个条目自身都要有上内边距，包括第一个 —— 检测器的 cramped-padding
+        实测要求「文字不能贴在自身边框盒顶部」，8px 即达标，取 14px。
+        第一个条目不给分隔线（会在标题区和正文之间多出一道横线），但内边距照给。
+        14px 是上界：抖音版 4 条式页面在 32px 时会顶出 35–38px，14px 恰好收回。 */
+  [data-theme="impeccable"] .item{
+    border-left:0;border-top:1px solid var(--rank-bd);padding-left:0;padding-top:14px;
+  }
+  [data-theme="impeccable"] .in-items > .item:first-child{
+    border-top:0;padding-top:14px;
+  }
+  /* 数据块：从「三个圆角小卡」改成「横线 + 三栏 + 栏间细竖线」的报表排法 */
+  [data-theme="impeccable"] .data-row{
+    gap:0;border-top:1px solid var(--rank-bd);border-bottom:1px solid var(--rank-bd);
+    padding:26px 0;
+  }
+  [data-theme="impeccable"] .data-box{background:transparent;border-radius:0;padding:0 26px}
+  [data-theme="impeccable"] .data-box + .data-box{border-left:1px solid var(--rank-bd)}
+  [data-theme="impeccable"] .data-box:first-child{padding-left:0}
+  [data-theme="impeccable"] .data-box:last-child{padding-right:0}
+  /* 提示框：去左色条，改整块淡底 + 细描边 */
+  [data-theme="impeccable"] .warn{
+    border:1px solid var(--warn-bd);border-radius:12px;background:var(--warn-bg);
+  }
+  /* 排行行内高亮：去左色条，只留淡底 + 加粗 */
+  [data-theme="impeccable"] .rank-row.me{border-left:0;background:var(--rank-me-bg)}
+  [data-theme="impeccable"] .rank-row.me .nm{font-weight:700}
+
   /* ===================== 封面（深色）===================== */
   .cover{
     background:var(--cv-bg);color:#FFFFFF;

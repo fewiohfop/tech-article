@@ -12,9 +12,12 @@ build_cards.py — 用 JSON 描述页面 → 套用 article-to-social 模板 CSS
 spec.json 结构:
 {
   "platform": "xhs" | "douyin",
-  "theme": "midnight|ember|violet|jade|vermilion",   # 5 套统一主题（可整篇，也可逐页覆盖）
+  "theme": "midnight|ember|violet|jade|vermilion|impeccable",  # 统一主题（可整篇，也可逐页覆盖）
            "neon|flare|aurora|acid|crimson",          # 抖音旧主题名，保留为别名，已自动映射
-  "html_theme": "midnight",
+  "html_theme": "impeccable",                         # 缺省 = impeccable（2026-10-12 起为默认）
+  "html_accent": "brass",                             # 仅 impeccable 生效：换色皮肤，见 ACCENTS
+                                                      # 缺省 / "random" = 按周期自动选（7 天前进一档）
+  "accent_seed": "2026-10-12",                        # 可选：锁定期序号（同日重渲颜色不变）
   "pages": [
     { "type":"cover", "export":"01-封面.png", "theme":"ember",
       "chip":"AI 前沿", "corner":"行业事件",          # xhs 右上角栏目词
@@ -46,6 +49,7 @@ import json
 import os
 import re
 import sys
+from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _paths import TEMPLATE  # noqa: E402
@@ -53,6 +57,44 @@ from _paths import TEMPLATE  # noqa: E402
 # 2026-10-06：两平台合并为一份模板，platform 走 <html data-platform="...">
 # 模板路径由 _paths.py 解析（可用环境变量 CARDS_TEMPLATE 覆盖）
 TPL = {"_default": TEMPLATE}
+
+# 2026-10-12：默认主题改为 impeccable（编辑墨色）。原来默认 midnight。
+DEFAULT_THEME = "impeccable"
+
+# impeccable 的「换色皮肤」（模板里 [data-theme="impeccable"][data-accent="..."]）。
+# 第一项 brass 是默认皮，也是模板基础块里那套值。
+# ⚠️ 不要加紫色相（~270-310°）：impeccable 检测器把霓虹紫列为 AI 生成 UI 指纹，
+#    会报 ai-color-palette。同理避免高饱和青。详见 tools/gen_accents_css.py 顶部说明。
+ACCENTS = ["brass", "terracotta", "indigo", "moss", "rose", "teal"]
+
+
+def pick_accent(spec, override=None):
+    """选一套换色皮肤。
+
+    优先级：命令行 --accent > spec.html_accent > 按周期自动选。
+    显式值不是合法名字（或写了 "random"）时，一律回落到自动选。
+
+    自动选 = 以日期序数 //7 取模 —— 每过 7 天前进一档，42 天走完一圈。
+    这样**同一周内重复渲染颜色恒定**（不会「重渲一次换个色」），
+    而跨周自然换色、相邻两周必然不同色。要锁定某期，写 accent_seed。
+    """
+    for v in (override, spec.get("html_accent")):
+        if not v or v == "random":
+            continue
+        if v in ACCENTS:
+            return v
+        print("WARN  未知 html_accent=%r，可选 %s；改用自动选取" % (v, "/".join(ACCENTS)))
+
+    d = date.today()
+    seed = spec.get("accent_seed")
+    if seed:
+        m = re.search(r"(\d{4})-?(\d{2})-?(\d{2})", str(seed))
+        if m:
+            try:
+                d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                print("WARN  accent_seed=%r 不是合法日期，忽略" % seed)
+    return ACCENTS[(d.toordinal() // 7) % len(ACCENTS)]
 
 
 def autofill_platform(spec, platform):
@@ -83,9 +125,36 @@ def esc(s):
     return str(s)
 
 
-def theme_attr(page, html_theme):
+def set_attr(tag, name, value):
+    """在**单个标签字符串**里设置属性：已有则改值，没有就追加。
+
+    只作用于这一个标签，不会外溢到 head 的 CSS 注释或正文 —— 这正是
+    「全局搜属性名」的宽松正则做不到的（历史踩坑见 main() 里的注释）。
+    """
+    pat = r'(\b%s=")[^"]*(")' % re.escape(name)
+    if re.search(pat, tag):
+        return re.sub(pat, r"\g<1>%s\g<2>" % value, tag, count=1)
+    return tag[:-1].rstrip() + ' %s="%s">' % (name, value)
+
+
+def theme_attr(page, html_theme, accent=None):
+    """卡片的主题属性。
+
+    ⚠️ 为什么卡上也要写 data-accent（2026-10-12 踩坑）：
+       spec 通常每页都写 theme，于是每张卡自带 data-theme="impeccable"。而 CSS 变量
+       是按元素解析的 —— 卡自己命中 [data-theme="impeccable"] 那条默认配色规则，
+       就会**覆盖掉从 <html> 继承来的换色皮肤**，结果 6 套皮肤渲染出来长得一模一样。
+       卡上也写上 data-accent，让 [data-theme="impeccable"][data-accent="X"] 在卡上
+       同样命中（特异性更高），换色才真正生效。
+       只有卡的主题确实是 impeccable 时才加 —— 逐卡混用别的主题不受影响。
+    """
+    parts = []
     t = page.get("theme")
-    return ' data-theme="%s"' % t if t else ""
+    if t:
+        parts.append('data-theme="%s"' % t)
+    if accent and (t or html_theme) == "impeccable":
+        parts.append('data-accent="%s"' % accent)
+    return (' ' + ' '.join(parts)) if parts else ""
 
 
 def _hl(text, word):
@@ -99,7 +168,7 @@ def _hl(text, word):
     return text.replace(word, '<span class="cv-hl">%s</span>' % word, 1)
 
 
-def render_cover(p, platform, html_theme):
+def render_cover(p, platform, html_theme, accent=None):
     parts = []
     # compact：榜单类封面用。标题缩小、留白收紧，把版面让给 blocks。
     # 2026-10-07 新增 —— 原来封面既不渲染 blocks 也没有紧凑模式，
@@ -112,7 +181,7 @@ def render_cover(p, platform, html_theme):
     lines_cls = '' if (compact or not nbig) else ' lines%d' % nbig
     fit_attr = (' data-fit="%s"' % p["cover_fit"]) if (lines_cls and p.get("cover_fit")) else ''
     parts.append('<div class="card cover%s%s"%s data-export="%s"%s>'
-                 % (compact, lines_cls, theme_attr(p, html_theme), p["export"], fit_attr))
+                 % (compact, lines_cls, theme_attr(p, html_theme, accent), p["export"], fit_attr))
     parts.append('  <div class="cv-grid"></div>')
     parts.append('  <div class="cv-glow"></div>')
     parts.append('')
@@ -269,9 +338,10 @@ def render_blocks(blocks, gap):
     return "\n".join(out)
 
 
-def render_inner(p, platform, html_theme):
+def render_inner(p, platform, html_theme, accent=None):
     out = []
-    out.append('<div class="card inner"%s data-export="%s">' % (theme_attr(p, html_theme), p["export"]))
+    out.append('<div class="card inner"%s data-export="%s">'
+               % (theme_attr(p, html_theme, accent), p["export"]))
     out.append('  <div class="in-head">')
     brand = p.get("brand", "")
     if p.get("mark"):
@@ -312,6 +382,8 @@ def main():
     ap.add_argument("--template")
     ap.add_argument("--platform", choices=["xhs", "douyin"],
                     help="覆盖 spec 里的 platform。用同一份内容出两个平台时指定此项")
+    ap.add_argument("--accent", choices=ACCENTS,
+                    help="覆盖换色皮肤（仅 impeccable 主题生效）。不传 = 按周期自动选")
     args = ap.parse_args()
 
     spec = json.load(open(args.spec, encoding="utf-8"))
@@ -320,14 +392,21 @@ def main():
     html = open(tpl_path, encoding="utf-8").read()
 
     head = html.split("<body>")[0]
-    # 平台差异：改 <html data-platform="...">，由模板内的属性选择器接管
-    # （页码格式 / 封面滑动提示 / 字号档位 / 末页互动引导）
-    head = re.sub(r'(<html[^>]*data-platform=")[^"]*(")', r"\g<1>%s\g<2>" % platform,
-                  head, count=1)
-    # 整篇主题
-    ht = spec.get("html_theme")
-    if ht:
-        head = re.sub(r'(<html[^>]*data-theme=")[^"]*(")', r"\g<1>%s\g<2>" % ht, head, count=1)
+    # 整篇主题 + 换色皮肤。缺省 html_theme 时用 DEFAULT_THEME（impeccable）。
+    ht = spec.get("html_theme") or DEFAULT_THEME
+    accent = pick_accent(spec, args.accent)
+
+    # ⚠️ 属性一律只改 <html ...> 标签**本身**，不要用「全局搜属性名」的宽松正则：
+    #    模板 CSS 注释里也会出现 data-accent 字样，宽松正则会把注释里那处当目标改掉
+    #    （2026-10-12 实测踩过：标签属性没写进去，注释里的示例反倒被改了）。
+    m = re.search(r"<html\b[^>]*>", head)
+    if not m:
+        print("ERR  模板里找不到 <html> 标签，无法写入平台/主题")
+        sys.exit(1)
+    tag = set_attr(m.group(0), "data-platform", platform)
+    tag = set_attr(tag, "data-theme", ht)
+    tag = set_attr(tag, "data-accent", accent)
+    head = head[:m.start()] + tag + head[m.end():]
 
     # 平台专属版式字段自动派生（已写明的值不覆盖）
     autofill_platform(spec, platform)
@@ -335,9 +414,9 @@ def main():
     chunks = []
     for p in spec["pages"]:
         if p["type"] == "cover":
-            chunks.append(render_cover(p, platform, ht))
+            chunks.append(render_cover(p, platform, ht, accent))
         else:
-            chunks.append(render_inner(p, platform, ht))
+            chunks.append(render_inner(p, platform, ht, accent))
 
     # 封面行内高亮词自检：词不在对应行文本里 = 写了等于没写（静默失效，最难查）
     for p in spec["pages"]:
@@ -354,6 +433,7 @@ def main():
     n = len(spec["pages"])
     exp = [p["export"] for p in spec["pages"]]
     print("OK 写入 %s（%s / %d 页）" % (args.out, platform, n))
+    print("   主题 %s%s" % (ht, " · 皮肤 %s" % accent if ht == "impeccable" else ""))
     for e in exp:
         print("   ", e)
 

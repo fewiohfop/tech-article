@@ -1,6 +1,6 @@
 ---
 name: article-to-social
-description: 把一篇文章（网页链接或原文）转成小红书 / 抖音图文：输出标题候选、正文、话题，并渲染出 3:4 卡片 PNG 与单文件汇总 HTML。两个平台共用一套 UI 与流程，差异集中在「平台差异速查表」。内置「事实交叉核验」与「结构重组」两个环节（前者禁止捏造数据，后者降低洗稿感），出图支持 5 套主题混用。支持选题发现：只收 AI / 科技内容源（今日热榜科技与 AI 节点 + X 聚合站 + GitHub Trending），与常规社会热榜严格分开。当用户说「把这篇文章转小红书」「转成小红书图文」「做一篇小红书笔记」「转抖音」「抖音图文」「文章转卡片」「跑选题发现」「今天发什么」时使用。
+description: 把一篇文章（网页链接或原文）转成小红书 / 抖音图文：输出标题候选、正文、话题，并渲染出 3:4 卡片 PNG 与单文件汇总 HTML。两个平台共用一套 UI 与流程，差异集中在「平台差异速查表」。内置「事实交叉核验」与「结构重组」两个环节（前者禁止捏造数据，后者降低洗稿感），出图支持 7 套主题混用（默认 impeccable，另带 6 套可自动轮换的换色皮肤）。支持选题发现：只收 AI / 科技内容源（今日热榜科技与 AI 节点 + X 聚合站 + GitHub Trending），与常规社会热榜严格分开。当用户说「把这篇文章转小红书」「转成小红书图文」「做一篇小红书笔记」「转抖音」「抖音图文」「文章转卡片」「跑选题发现」「今天发什么」时使用。
 agent_created: true
 ---
 
@@ -507,35 +507,65 @@ allowed_domains: ["officechai.com", "nokiapoweruser.com", "kocpc.com.tw",
 | 末页底部 | 仅来源一行 | 仅来源一行 |
 | 字号 / 间距档位 | 基准 | 大一档（`[data-platform="douyin"]` 覆盖 `--fs-*`） |
 
-**配色两平台完全一致**（5 套统一主题）。抖音旧主题名 `neon/flare/aurora/acid/crimson`
+**配色两平台完全一致**（7 套统一主题）。抖音旧主题名 `neon/flare/aurora/acid/crimson`
 保留为别名指向视觉最接近的一套 → **旧 spec 无需改**。
 
 > ⚠️ **历史行为差异（不是回归）**：2026-06 之前，抖音 spec 若写 `flare` 这类旧主题名，
 > 在旧逻辑下会**回落到默认深蓝**（因为注入的是小红书主题名，抖音名找不到定义）。
 > 合并后别名真正生效，**配色会变** —— 这是修复。
 
-#### 5 套主题，可整篇切换，也可逐卡混用
+#### 7 套主题，可整篇切换，也可逐卡混用
 
 只改一个属性就能换皮，字号、排版、留白完全不动：
 
 | `data-theme` | 配色（封面底 / 强调） | 底纹 | 建议场景 |
 |---|---|---|---|
-| `midnight` 深蓝科技 | `#0B1220` / `#38BDF8` | 方格网格 90px | 默认；硬核技术、行业分析、数据类 |
+| `impeccable` 编辑墨色 | `#12140F` / `#C9A227` | 无（留白） | **默认**；六套换色皮肤见下一节 |
+| `midnight` 深蓝科技 | `#0B1220` / `#38BDF8` | 方格网格 90px | 硬核技术、行业分析、数据类 |
 | `ember` 琥珀暖调 | `#17110A` / `#F59E0B` | 斜线纹理 45° | 争议、翻车、成本上涨、踩坑复盘 |
 | `violet` 紫罗兰 | `#120B1F` / `#A78BFA` | 圆点阵 46px | 产品发布、工具推荐、应用场景 |
 | `jade` 青瓷墨绿 | `#06171A` / `#2DD4BF` | 细密网格 38px | 科普、原理讲解、长文干货 |
 | `vermilion` 朱红 | `#101013` / `#FB7185` | 左色条 + 横细线 | 强观点、辟谣、打脸反转 |
 
 ```html
-<html data-theme="ember" data-platform="xhs">           <!-- 整篇一套 + 指定平台 -->
+<html data-theme="impeccable" data-platform="xhs" data-accent="rose">  <!-- 整篇一套 -->
 <div class="card cover" data-theme="violet">             <!-- 逐卡混用，只影响这一张 -->
 <div class="card inner" style="--acc:#7C3AED">           <!-- 只覆盖单个变量 -->
 ```
 
-**默认选法**：按选题调性自动匹配上表场景，不必每次问用户；
+**默认 = `impeccable`**（2026-10-12 起，取代原默认 `midnight`）：spec 不写 `html_theme`
+就是它；老 spec 里写死 `"html_theme": "midnight"` 的仍按老样出，不受影响。
+
+##### impeccable 的换色皮肤（`data-accent`，2026-10-12 新增）
+
+impeccable 多一维：**同一套版式与配色逻辑，只换色相** —— 地面、纸面、强调色一起走，
+不是只换一个高亮色。这一维就是给「每期换一个颜色」用的。
+
+| `data-accent` | 地面 / 纸面 / 强调 | 调性 |
+|---|---|---|
+| `brass` 黄铜 | `#12140F` / `#FAF8F3` / `#C9A227` | 默认皮，最克制 |
+| `terracotta` 赤陶 | `#14100E` / `#FAF6F2` / `#D0794E` | 暖橙：复盘、争议、翻车 |
+| `indigo` 靛蓝 | `#0F1217` / `#F4F6FA` / `#7F9ED7` | 冷蓝：技术、工具、硬核分析 |
+| `moss` 苔绿 | `#11130F` / `#F7F9F3` / `#95B663` | 黄绿：科普、方法论、长文 |
+| `rose` 玫红 | `#140F11` / `#FAF5F6` / `#C5637B` | 玫红：观点、反转、人物 |
+| `teal` 深青 | `#0D1313` / `#F4F9F8` / `#639C96` | 青绿：数据、原理、行业观察 |
+
+**不指定就自动轮换**：以日期序数 ÷7 取模，每 7 天前进一档、42 天一圈 ——
+同一周重渲颜色恒定（不会「重渲一次换个色」），跨周自然换、相邻两周必不同色。
+锁定某一期：spec 写 `"html_accent": "rose"`（或 `"accent_seed": "2026-10-12"`）；
+临时指定：构建时加 `--accent rose`。
+
+> ⚠️ **不要加紫色相（~270–310°）**：检测器把深底霓虹紫列为 AI 生成 UI 指纹
+> （`ai-color-palette`，计入 anti-pattern）。原 `plum` 茄紫即使降到低饱和仍报 3 条，故整条换掉；
+> 高饱和青同理（`teal` 明度压到 50% 才过）。加新皮的流程见 `tools/gen_accents_css.py` 顶部。
+>
+> ⚠️ **卡上也要带 `data-accent`**：CSS 变量按元素解析，卡自带 `data-theme="impeccable"` 时
+> 会命中默认配色把皮肤盖回去。build_cards.py 的 `theme_attr()` 已处理，**别绕过它手写卡片标签**。
+
+**默认选法**：impeccable 由脚本按周期自动换色，不必每次问用户；
 用户若指定「都用某套」或「这批不许重复」，从其要求。
 
-**警示框（`--warn-*`）刻意不随主题变**，五套里统一琥珀色 —— 它是合规提示，
+**警示框（`--warn-*`）刻意不随主题变**，各套里统一琥珀色 —— 它是合规提示，
 跟着主题换色会削弱醒目程度。
 
 #### 排版硬要求
@@ -790,8 +820,10 @@ python "$P/make_all.py" --root <根目录> --workers 3 # 批量，多目录并�
 
 ```jsonc
 {
-  "theme": "midnight",          // 5 套统一主题，可整篇
-  "html_theme": "midnight",     // 背景与配色用的那一套
+  "theme": "impeccable",        // 7 套统一主题，可整篇
+  "html_theme": "impeccable",   // 背景与配色用的那一套（缺省就是 impeccable）
+  "html_accent": "rose",        // 仅 impeccable 生效：换色皮肤；缺省 / "random" = 按周期自动选
+  "accent_seed": "2026-10-12",  // 可选：锁定期序号（同日重渲颜色不变）
   "pages": [
     { "type": "cover", "export": "01-封面.png", "theme": "ember",
       "chip": "AI 前沿", "corner": "行业事件",    // corner = 小红书右上角栏目词
@@ -929,6 +961,14 @@ python build_preview.py --cards <output目录> --out <汇总.html> --meta <meta.
 | `titles` | `[{"style": "事实型", "text": "标题文字"}, ...]` | **字符串数组会报** `'str' object has no attribute 'get'` |
 | `tags` | `["AI", "开源模型"]` | 写成 `topics` → 校验脚本说「没有 tags 字段」，话题数不检查 |
 | `body` | 纯字符串 | — |
+| **`verify`** | `[{"point":"…","sources":5,"level":"L1","note":"…"}, ...]` | ⚠️ **写成 `fact_table`（数组套数组）→ 汇总页静默不生成**（见下） |
+| **`sources`** | `[{"name":"媒体名","url":"https://…"}, ...]` | ⚠️ **写成纯字符串 → 同样静默失败** |
+
+> 🔴 **2026-10-13 踩坑**：用了自造的 `fact_table` + 字符串 `sources`，
+> `build_preview.py` 抛 `AttributeError: 'str' object has no attribute 'get'`，
+> 但 **`make.py` 照常交付了 7 张 PNG、`deliver.py` 只是报「0 个 HTML」** —— **不报错、只少文件**。
+> 症状：**「N 张 PNG | 0 个 HTML」→ 立刻查 meta 字段结构，不是渲染或出图问题。**
+> 字段定义的权威位置是 `scripts/build_preview.py` 顶部的注释，改汇总页板块先看那里。
 
 > **典型症状**：PNG 正常出图，`RESULT bad=0`，但交付只有「6 张 PNG | 0 个 HTML」。
 > 这不是渲染问题，是 meta 结构错。**看到 0 个 HTML 立刻查 titles 格式。**
