@@ -36,6 +36,11 @@ DEFAULT_PY = sys.executable
 TREND = os.path.join(SCRIPTS, "github_trending_official.py")
 FIELDS = os.path.join(SCRIPTS, "fetch_repo_fields.py")
 BUILD = os.path.join(SCRIPTS, "build_pool.py")
+# ⚠️ 2026-10-12 新增：自算「区间增量」。
+#    官方 trending 页**只用来发现候选**，排名一律用本脚本自算的增量。
+DELTA = os.path.join(SCRIPTS, "star_interval_delta.py")
+UNIVERSE = os.path.join(SKILL, "data", "universe.txt")
+SNAP_STORE = os.path.join(SKILL, "data", "star_snapshots")
 
 # 选题池输出目录：环境变量优先，其次本机惯例
 # 2026-10-08 起选题只出一份，统一放 C:\选题（不再分平台；平台目录只放成品）
@@ -43,14 +48,14 @@ def _topic_dir():
     return os.environ.get("TOPIC_DIR") or r"C:\选题"
 
 
-def run(cmd, timeout=600):
+def run(cmd, timeout=600, check=True):
     t0 = time.time()
     r = subprocess.run(cmd, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", timeout=timeout)
     dt = time.time() - t0
     tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
     print("  [%5.1fs] %s" % (dt, tail[-1] if tail else "(no output)"))
-    if r.returncode != 0:
+    if r.returncode != 0 and check:
         print("  !! 退出码 %s" % r.returncode)
         for line in tail[-5:]:
             print("     " + line)
@@ -74,11 +79,11 @@ def main():
     print("工作目录: %s" % work)
     print()
 
-    print("[1/4] 抓周榜（官方 trending?since=weekly，star 增量口径）")
+    print("[1/6] 抓周榜（官方 trending?since=weekly —— 只用于「候选发现」，不作排名口径）")
     run([DEFAULT_PY, TREND, "--period", "weekly", "--limit", str(args.limit),
          "--json", "--out", w("_gh_weekly.json")])
 
-    print("[2/4] 抓日榜（用于标注重合）")
+    print("[2/6] 抓日榜（用于标注重合）")
     run([DEFAULT_PY, TREND, "--period", "daily", "--limit", str(args.limit),
          "--json", "--out", w("_gh_daily.json")])
 
@@ -104,7 +109,33 @@ def main():
     with open(w("repos.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(names))
 
-    print("[3/4] 抓仓库字段（星标 / 最后更新 pushed_at / 许可证）")
+    print("[3/6] 更新候选池 %s（本期新仓库追加进去，只增不减）" % UNIVERSE)
+    os.makedirs(os.path.dirname(UNIVERSE), exist_ok=True)
+    old = []
+    if os.path.exists(UNIVERSE):
+        old = [l.strip() for l in open(UNIVERSE, encoding="utf-8")
+               if l.strip() and not l.startswith("#")]
+    low = {x.lower() for x in old}
+    added = [n for n in names if n.lower() not in low]
+    if added:
+        with open(UNIVERSE, "a", encoding="utf-8") as f:
+            f.write("\n".join(added) + "\n")
+    print("      原有 %d 个，新增 %d 个，合计 %d 个"
+          % (len(old), len(added), len(old) + len(added)))
+
+    print("[4/6] 落总星快照 + 自算区间增量（窗口 = 上一周周一 00:00 → 本周一 00:00）")
+    rs = run([DEFAULT_PY, DELTA, "snapshot", "--universe", UNIVERSE,
+              "--store", SNAP_STORE])
+    rc = run([DEFAULT_PY, DELTA, "compute", "--universe", UNIVERSE,
+              "--store", SNAP_STORE, "--out", w("_star_delta.json")], check=False)
+    if rc.returncode != 0:
+        print("      ⚠️ 没算出区间增量 —— 通常是「窗口起点那一侧的快照还不存在」"
+              "（本机制是自算快照，第一次跑只能落点、不能出数）。")
+        print("      解决：① 下一期自然就有；② 现在就要历史窗口的话，"
+              "提供 GitHub token 用 backfill 精确回填。")
+        print("      → 拼版会因此把 A 榜标成「降级·排序不可信」，不会伪造名次。")
+
+    print("[5/6] 抓仓库字段（星标 / 最后更新 pushed_at / 许可证）")
     print("      共 %d 个仓库" % len(names))
     run([DEFAULT_PY, FIELDS, "--repos-file", w("repos.txt"),
          "--out", w("_gh_fields.json")])
@@ -136,7 +167,7 @@ def main():
                   ensure_ascii=False, indent=1)
         print("      已生成 _pool_desc.json 骨架（**需补写文案**）")
 
-    print("[4/4] 生成选题池 HTML")
+    print("[6/6] 生成选题池 HTML（排名一律用自算增量）")
     sel = _topic_dir()
     os.makedirs(sel, exist_ok=True)
     r = run([DEFAULT_PY, BUILD, "--work", work, "--out", sel, "--date", args.date])

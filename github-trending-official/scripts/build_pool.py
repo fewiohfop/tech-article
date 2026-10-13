@@ -87,6 +87,21 @@ def build(work, date, pull_a, pull_f):
     F = j("_gh_fields.json")
     D = j("_pool_desc.json")
 
+    # ⚠️ 2026-10-12 起：A 榜的唯一排序依据 = 自算的「区间增量」。
+    #    来源 _star_delta.json（由 star_interval_delta.py compute 产出），
+    #    口径 = 上一周周一 00:00 → 本周一 00:00 的两次总星快照之差。
+    #    这里**只读文件里的 items 顺序**（已按 delta 降序），不重排、不手写名次。
+    #    文件缺失时降级到官方页顺序，并在页面顶部打红框警告。
+    delta_doc = None
+    dp = os.path.join(work, "_star_delta.json")
+    if os.path.exists(dp):
+        try:
+            delta_doc = json.load(open(dp, encoding="utf-8"))
+        except Exception:
+            delta_doc = None
+    DELTA = ({x["name"]: x for x in delta_doc.get("items", [])}
+             if delta_doc else {})
+
     def stars(repo, fallback=None):
         """优先 API 实时值；没抓到的退回 trending 页快照。兜底绝不是 0。"""
         v = F.get(repo)
@@ -114,12 +129,22 @@ def build(work, date, pull_a, pull_f):
         return v.get("license", "") if (v and "error" not in v) else ""
 
     def row_rank(i, name, src):
-        w = src[name]
+        w = src.get(name, {}) or {}
+        di = DELTA.get(name)
+        if di:
+            # 自算区间增量：数字来自两次快照总星之差，不是任何第三方给的增量
+            dcell = ('<td class="delta">+%s<span class="src">%s → %s</span></td>'
+                     % (format(di["delta"], ","),
+                        format(di["stars_from"], ","),
+                        format(di["stars_to"], ",")))
+        else:
+            dcell = ('<td class="delta">+%s<span class="src">官方页口径·未自算</span></td>'
+                     % format(w.get("period_stars") or 0, ","))
         return """<tr><td class="n">%d</td><td><a href="https://github.com/%s">%s</a><span class="repo">%s</span></td>
-<td class="num">%s · %s</td><td class="delta">+%s</td>%s<td class="desc">%s</td></tr>""" % (
+<td class="num">%s · %s</td>%s%s<td class="desc">%s</td></tr>""" % (
             i, name, name.split("/")[1], name, w.get("language") or "-",
-            stars(name, w.get("stars")), "{:,}".format(w.get("period_stars") or 0),
-            upcell(name), D["a_desc"].get(name, w.get("description") or ""))
+            stars(name, w.get("stars")), dcell, upcell(name),
+            D["a_desc"].get(name, w.get("description") or ""))
 
     def row_b(it):
         repo, nick, lang, desc = it
@@ -129,9 +154,43 @@ def build(work, date, pull_a, pull_f):
             repo, nick, repo, lang, stars(repo, None), upcell(repo), desc,
             ('<span class="src">许可证：%s</span>' % l) if l else "")
 
-    A = [x["name"] for x in sorted(weekly.values(), key=lambda v: v["rank"])]
+    # A 榜：有自算增量就严格按它排（文件里已是 delta 降序），否则降级到官方页顺序
+    if DELTA:
+        A = [x["name"] for x in delta_doc["items"]]
+    else:
+        A = [x["name"] for x in sorted(weekly.values(), key=lambda v: v["rank"])]
     A2 = [x["name"] for x in sorted(daily.values(), key=lambda v: v["rank"])]
     B1, B2, B3 = D["b1"], D["b2"], D["b3"]
+
+    # 顶部口径提示：有自算增量 vs 降级
+    if DELTA:
+        win = delta_doc.get("window", {})
+        snap = delta_doc.get("snapshots", {})
+        rank_note = (
+            '<div class="note green">'
+            '<b>增量口径：本页自己算的「区间增量」。</b>'
+            '窗口 = <b>%s</b> → <b>%s</b>（%s，固定 %s 天）。'
+            '算法 = 窗口两个端点上该仓库的<b>总星数快照之差</b>，'
+            '不采用任何第三方直接给出的「本周增量」。'
+            '快照实拍：起点 %s（滞后 %s h）／终点 %s（滞后 %s h）；'
+            '实际间隔 <b>%s 小时</b>。'
+            '</div>'
+        ) % (win.get("from", "-"), win.get("to", "-"), win.get("tz", "GMT+8"),
+             win.get("nominal_days", 7),
+             (snap.get("from") or {}).get("captured_at", "-"),
+             (snap.get("from") or {}).get("lag_hours", "-"),
+             (snap.get("to") or {}).get("captured_at", "-"),
+             (snap.get("to") or {}).get("lag_hours", "-"),
+             delta_doc.get("actual_capture_span_hours", "-"))
+    else:
+        rank_note = (
+            '<div class="note red">'
+            '<b>⚠️ 本页未使用自算增量，排序不可信。</b>'
+            '找不到 <code>_star_delta.json</code>，已降级为官方 trending 页顺序 —— '
+            '而官方页顺序<b>本身不按增量降序</b>（2026-10-12 实测页序 25,151 → 6,440 → '
+            '10,330 → 3,803…）。请先跑 <code>star_interval_delta.py</code> 再拼版。'
+            '</div>'
+        )
 
     picks = "\n".join("<li>%s</li>" % p for p in D["picks"])
     extra = D.get("extra_notes", "")
@@ -156,16 +215,18 @@ def build(work, date, pull_a, pull_f):
 <b>② 推荐类选题池</b>（本页）。两条线两份文件、互不合并；②不是可选补充。
 </div>
 
+{RANK_NOTE}
 <div class="note">
 <b>字段口径（先读再挑）：</b>
-<b>增量</b>=官方 trending 页的 <code>stars today / this week</code>，<b>不是</b>总星；本页排序依据是<b>增量</b>。
+<b>增量</b>=本脚本自算的「区间增量」（窗口两端总星快照之差），<b>不是</b>总星、
+<b>也不是</b>任何第三方页面上的「本周增量」数字；本页排序依据是<b>该自算增量</b>。
 <b>星标</b>=GitHub API <code>stargazers_count</code> 实时值（会随时间变）。
 <b>「最后更新」</b>=API <code>pushed_at</code>，即<b>最后一次向仓库推送代码</b>的时间，已换算北京时间；
 <b>不是</b> star 变化、也不是收录时间。未抓 API 的条目该列留 <code>—</code>，<b>不猜</b>。
 </div>
 {EXTRA}
-<h2>A · GitHub 周榜（按本周增量排序，{NA} 条）</h2>
-<p class="sub">数据源：github.com/trending?since=weekly ｜ 做成品时按「前 5 条」起（前 5 或前 10）｜ 前若干条已逐条抓「最后更新」</p>
+<h2>A · GitHub 周榜（按「自算区间增量」降序，{NA} 条）</h2>
+<p class="sub">候选发现：github.com/trending?since=weekly + 历史候选池 ｜ <b>排名依据：自算区间增量</b>（窗口两端总星快照之差）｜ 增量列下方小字为「起点总星 → 终点总星」｜ 做成品时按「前 5 条」起（前 5 或前 10）｜ 前若干条已逐条抓「最后更新」</p>
 <table>
 <thead><tr><th>#</th><th>项目</th><th>语言 · 总星</th><th>本周增量</th><th>最后更新</th><th>介绍</th></tr></thead>
 <tbody>
@@ -219,10 +280,14 @@ def build(work, date, pull_a, pull_f):
 
 <footer>
 抓取时点：榜单 <b>{PULL_A}</b>｜仓库字段 <b>{PULL_F}</b>（均为 GMT+8）。<br>
-数据源：<code>github.com/trending?since=weekly / daily</code>（增量口径）·
+数据源：候选发现 <code>github.com/trending?since=weekly / daily</code> ·
+总星快照 <code>api.ossinsight.io/gh/repos/&lt;owner&gt;/&lt;repo&gt;</code>（直连 GitHub 同源，已与
+<code>api.github.com</code> 交叉核对一致）·
 <code>api.github.com/repos/&lt;owner&gt;/&lt;repo&gt;</code>（星标 / pushed_at）·
 <code>hellogithub.com</code> · <code>github.com/explore</code> · <code>producthunt.com</code>。<br>
-口径说明：<b>增量 ≠ 总星</b>；增量取自官方 trending 页，会随页面缓存变动。<br>
+口径说明：<b>增量 = 本脚本自算的区间增量</b>（上一周周一 00:00 → 本周一 00:00 两端总星快照之差），
+<b>增量 ≠ 总星</b>，也<b>不采用</b> GitHub 官方 trending 页或任何第三方榜站直接给出的「本周增量」；
+官方页仅用于「候选发现」。<br>
 本页为「抓取的选题资料」，不是成品图文。成品走 <code>article-to-social</code></code> 的 ①–⑧。
 </footer>
 </div>
@@ -230,6 +295,7 @@ def build(work, date, pull_a, pull_f):
 </html>
 """.format(
         DATE=date, CSS=CSS, PULL_A=pull_a, PULL_F=pull_f, EXTRA=extra,
+        RANK_NOTE=rank_note,
         NA=len(A), NA2=len(A2), NB1=len(B1),
         ROWS_A="\n".join(row_rank(i, n, weekly) for i, n in enumerate(A, 1)),
         ROWS_A2="\n".join(row_rank(i, n, daily) for i, n in enumerate(A2, 1)),

@@ -35,15 +35,66 @@ agent_created: true
 
 ---
 
-## ⚠️ 口径：什么才算「热」
+## ⚠️ 口径（2026-10-12 定稿，硬规则，不要再改）
 
-**判断口径是否正确的唯一标准：有没有「增量」字段。**
+**「本周增量」必须由我们自己在两个端点上做差算出来。任何第三方直接给出的增量数字，一律不作排名口径。**
 
-| 来源 | 给的是 | 能不能当热榜 |
+    窗口 = 上一周周一 00:00 → 本周一 00:00（Asia/Shanghai / GMT+8），固定 7 天
+    增量 = 窗口终点该仓库的总星数 − 窗口起点该仓库的总星数
+
+实现：`scripts/star_interval_delta.py`（子命令 `snapshot` / `compute` / `verify` / `backfill`）
+候选池：`data/universe.txt`　快照：`data/star_snapshots/<YYYY-MM-DD>.json`
+
+| 来源 | 给的是 | 怎么用 |
 |---|---|---|
-| `github.com/trending` 官方页 | **stars today / this week** 增量 | ✅ 唯一正确口径 |
-| GitHub Search API `sort=stars` | 总 star 数 | ❌ **不是热榜** |
-| GitHub Explore | 官方运营挑选 | ✅ 但属「推荐」不是「热度」 |
+| **本 skill 自算的快照差** | **区间增量**（上一周周一 00:00 → 本周一 00:00） | ✅ **唯一排名口径** |
+| `github.com/trending?since=weekly` | 官方「stars this week」，**滚动 7×24 小时** | ⚠️ **只用于「候选发现」**，不排名、不抄数字 |
+| OSS Insight `stargazers/history` | 事件派生的 star 历史 | ❌ **不可用**（见下） |
+| GitHub Search API `sort=stars` | 总 star 数 | ❌ 不是热榜 |
+| GitHub Explore / HelloGitHub / Product Hunt | 运营挑选 | ✅ 但属「推荐」不是「热度」 |
+
+### 为什么官方 trending 页不能当口径（2026-10-12 实测）
+
+1. **条数少、偏向英文代码项目**：全页只有 12 条，中文内容型项目被系统性压低。
+   2026-10-07 实测：中文项目 `eternity4719/HowToLiveBetter` 7 天约 +1.9 万、
+   第三方增量榜第 1，**官方页 12 条里根本没有它**。
+2. **官方页顺序本身不按增量降序**：2026-10-12 实测页序为
+   `25,151 → 6,440 → 10,330 → 3,803 → 794 → 4,223 → 1,140 → …`。
+   **照页序渲染 = 榜单排序错误**（2026-10-12 真发生过：第 10 行 1,140 比第 8 行 936 大，
+   却被压在第 10 位）。
+3. **两期窗口重叠 6 天，不能比大小**：它是滚动 7×24 小时，不是自然周。
+
+### 为什么不能用 OSS Insight 的 star 历史（2026-10-12 实测）
+
+`https://api.ossinsight.io/v1/repos/{o}/{r}/stargazers/history/` 自带 `data_quality` 字段，原文：
+
+> `status: degraded`｜`suspect_since: 2025-05-23`｜`severely_degraded_since: 2026-05-01`
+> GitHub position-partitioned the `/events` firehose (~2025-05-23) and our ETL read only
+> the near-Push-only first page, so **event-derived star/PR/issue counts are lower bounds,
+> not exact values**.
+
+实测佐证：`torvalds/linux` 该接口 2026-10-12 累计值 **233,852**，
+GitHub 真值 **251,568** —— 低 **17,716（7.0%）**。**是下界，不是增量。**
+
+### 其它源为什么也不行（2026-10-12 本机实测）
+
+| 源 | 结果 |
+|---|---|
+| `ghtrends.dev`、`findarepo.com` | 本机不可达 |
+| `star-history.com` | 只出 SVG；不支持日期区间参数（不同 `from`/`to` 返回同一份文件），7 天窗口在多年尺度曲线上分辨率不足 |
+| `web.archive.org`、`archive.org` | 本机不可达 |
+| GitHub `/repos/{o}/{r}/stargazers` + `Accept: application/vnd.github.star+json` | **唯一能给每个 star 带时间戳的接口，未授权直接 401**，必须 token |
+| 带共享 token 的 API 代理（kkgithub / ghapi.huchen.dev / ungh.cc / gitmirror） | 本机全部不可达 |
+
+### 总星数取哪条通路（都只给「此刻总数」，增量由脚本做差）
+
+| 通路 | 说明 | 配额 |
+|---|---|---|
+| `api.ossinsight.io/gh/repos/{o}/{r}/` | 直连 GitHub 同源；实测与 GitHub 完全一致（linux 251,568） | 宽松 → **主源** |
+| `api.github.com/repos/{o}/{r}` | GitHub 官方 | 未授权 60 次/小时 → 校验源 |
+| `github.com/{o}/{r}` 页面 `"stargazerCount"` | 页面内嵌值 | 无配额 → 兜底 |
+
+`python star_interval_delta.py verify` 可随时做三通路互相对数。
 
 已被停用的 `github-trending-cn`（市场版）就是踩了这个坑：
 它用 `pushed:>=日期` + 按**总** star 排序，2026-09-29 实测返回的前几名是
@@ -94,15 +145,27 @@ public-apis（48.4 万★）、freeCodeCamp（45.6 万★）、react、linux ker
 
 **因此，不存在「官方每周四更新」这种时刻。** 任何时刻去抓都是有效的滚动快照。
 
-#### 执行规则（固定采集时间）
+#### 执行规则（2026-10-12 起）
 
-1. **每期固定同一时刻抓一次**，推荐**每周一 09:00（GMT+8）**。
-   ⚠️ **理由要说准**：固定周一是因为**读者预期**（「周报」这个词的自然节奏），
-   **不是数据原因**。好处是两期之间不重不漏——每期正好覆盖「抓取时刻往前 7×24 小时」。
-2. **成品里必须写明具体时间与口径**，例如「滚动 7 天窗口 · 本次抓取 2026-10-07 09:1x（GMT+8）」。
+1. **每期周一 00:00 之后尽快跑一次**（自动化排在周一 09:00 GMT+8）。
+   现在窗口是**自然周**：上一周周一 00:00 → 本周一 00:00，固定 7 天 ——
+   两期之间**不重不漏**，这是用户 2026-10-12 明确要求的口径。
+   ⚠️ 快照要尽量贴近周一 00:00 拍；快照里会记 `lag_hours`（实拍滞后小时数），
+   偏差大时结论要按「实际间隔」说明，**不能只写名义 7 天**。
+2. **一次运行 = 六步**（`weekly_pool.py` 已串好，不要手工跳步）：
+   ① 抓官方周榜　② 抓官方日榜　③ 把新仓库追加进 `data/universe.txt`
+   ④ `star_interval_delta.py snapshot` + `compute` → `_star_delta.json`
+   ⑤ 抓仓库字段　⑥ `build_pool.py` 拼版
+3. **拼版必须读 `_star_delta.json`**。`build_pool.py` 的 A 榜顺序 = 该文件 `items` 的顺序
+   （已是 delta 降序），增量列的数字是「起点总星 → 终点总星」的快照差。
+   **禁止手写名次、禁止手敲增量数字** —— 2026-10-12 的排序错误就是手写 `rank` 造成的。
+   读不到该文件时页面会打红色警告框并降级，**不允许静默按官方页顺序出榜**。
+4. **成品里必须写明窗口与实拍时点**，例如
+   「区间增量 · 窗口 2026-10-05 00:00 → 2026-10-12 00:00（GMT+8）· 快照实拍 2026-10-12 11:00」。
    用户明确要求：「把具体时间告诉我是哪个时间」。
-3. 若用户想按**自然周一→周日**走，那是**另一种口径**，要在图里改口径说明；
-   此时建议改为**每周一早上抓「上周一至周日」**，并注明「本榜按自然周统计，与官方滚动 7 天窗口有差异」。
+5. **没有历史快照时不许编**：第一次跑只能落点、出不了数，`compute` 会明确报错，
+   被排除的仓库列在 `excluded` 里。要立刻还原历史窗口，只能走
+   `star_interval_delta.py backfill` + GitHub token（见该脚本头部说明）。
 4. 时区固定写 **GMT+8**，不要写 UTC。
 5. **已自动化**：每周一 09:00 自动跑 `scripts/weekly_pool.py` 出选题池。
    自动化只到选题池为止，**不产出图文**。

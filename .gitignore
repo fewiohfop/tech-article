@@ -13,3 +13,6 @@ config.json
 # Python 缓存
 __pycache__/
 *.pyc
+
+# 出图前的临时备份（本机过程文件，不进仓库）
+_backup/

@@ -1,0 +1,453 @@
+{
+ "boundary": "2026-10-12T00:00:00+0800",
+ "captured_at": "2026-10-12T11:00:26+0800",
+ "lag_hours": 11.01,
+ "note": "逐仓库抓「此刻总星」；三条通路顺序 ossinsight_gh > github_api > github_html。增量由 compute 子命令做差得出，本文件不含任何第三方增量数字。",
+ "repos": {
+  "ChenLiu-1996/figures4papers": {
+   "at": "2026-10-12T10:59:25+0800",
+   "source": "ossinsight_gh",
+   "stars": 8379
+  },
+  "DietrichGebert/ponytail": {
+   "at": "2026-10-12T10:59:33+0800",
+   "source": "ossinsight_gh",
+   "stars": 161183
+  },
+  "DuarteSantos8/openGym": {
+   "at": "2026-10-12T10:59:35+0800",
+   "source": "ossinsight_gh",
+   "stars": 9856
+  },
+  "Effect-TS/effect": {
+   "at": "2026-10-12T10:59:36+0800",
+   "source": "ossinsight_gh",
+   "stars": 17232
+  },
+  "EpicGames/raddebugger": {
+   "at": "2026-10-12T10:59:38+0800",
+   "source": "ossinsight_gh",
+   "stars": 8402
+  },
+  "FxEmbed/FxEmbed": {
+   "at": "2026-10-12T10:59:40+0800",
+   "source": "ossinsight_gh",
+   "stars": 5706
+  },
+  "Gaurav-Gosain/tuios": {
+   "at": "2026-10-12T10:59:41+0800",
+   "source": "ossinsight_gh",
+   "stars": 5203
+  },
+  "HKUDS/CLI-Anything": {
+   "at": "2026-10-12T10:59:45+0800",
+   "source": "ossinsight_gh",
+   "stars": 51926
+  },
+  "HunxByts/GhostTrack": {
+   "at": "2026-10-12T10:59:46+0800",
+   "source": "ossinsight_gh",
+   "stars": 18244
+  },
+  "Jinnrry/PMail": {
+   "at": "2026-10-12T10:59:47+0800",
+   "source": "ossinsight_gh",
+   "stars": 2281
+  },
+  "Lakr233/vphone-cli": {
+   "at": "2026-10-12T10:59:48+0800",
+   "source": "ossinsight_gh",
+   "stars": 15190
+  },
+  "M-Abozaid/esp32-c3-adblock": {
+   "at": "2026-10-12T10:59:51+0800",
+   "source": "ossinsight_gh",
+   "stars": 2821
+  },
+  "NVIDIA/OpenShell": {
+   "at": "2026-10-12T10:59:57+0800",
+   "source": "ossinsight_gh",
+   "stars": 15859
+  },
+  "NawfalMotii79/PLFM_RADAR": {
+   "at": "2026-10-12T10:59:56+0800",
+   "source": "ossinsight_gh",
+   "stars": 26866
+  },
+  "OpenMouse-Project/openmouse": {
+   "at": "2026-10-12T10:59:59+0800",
+   "source": "ossinsight_gh",
+   "stars": 2422
+  },
+  "Panniantong/Agent-Reach": {
+   "at": "2026-10-12T11:00:01+0800",
+   "source": "ossinsight_gh",
+   "stars": 96098
+  },
+  "PrismML-Eng/Bonsai-demo": {
+   "at": "2026-10-12T11:00:05+0800",
+   "source": "ossinsight_gh",
+   "stars": 3334
+  },
+  "RayrenSX/iPhoneMirror": {
+   "at": "2026-10-12T11:00:08+0800",
+   "source": "ossinsight_gh",
+   "stars": 1219
+  },
+  "Stremio/stremio-web": {
+   "at": "2026-10-12T11:00:13+0800",
+   "source": "ossinsight_gh",
+   "stars": 14513
+  },
+  "Tencent/WeKnora": {
+   "at": "2026-10-12T11:00:15+0800",
+   "source": "ossinsight_gh",
+   "stars": 33271
+  },
+  "TencentCloud/Octop": {
+   "at": "2026-10-12T11:00:15+0800",
+   "source": "ossinsight_gh",
+   "stars": 8702
+  },
+  "TencentCloud/TencentDB-Agent-Memory": {
+   "at": "2026-10-12T11:00:16+0800",
+   "source": "ossinsight_gh",
+   "stars": 27928
+  },
+  "VectifyAI/PageIndex": {
+   "at": "2026-10-12T11:00:21+0800",
+   "source": "ossinsight_gh",
+   "stars": 39055
+  },
+  "akitaonrails/ai-memory": {
+   "at": "2026-10-12T10:59:14+0800",
+   "source": "ossinsight_gh",
+   "stars": 9146
+  },
+  "alirezarezvani/claude-skills": {
+   "at": "2026-10-12T10:59:15+0800",
+   "source": "ossinsight_gh",
+   "stars": 28025
+  },
+  "anthropics/financial-services": {
+   "at": "2026-10-12T10:59:15+0800",
+   "source": "ossinsight_gh",
+   "stars": 39412
+  },
+  "arnegiacomo/fugleramme": {
+   "at": "2026-10-12T10:59:16+0800",
+   "source": "ossinsight_gh",
+   "stars": 3614
+  },
+  "averygan/reclip": {
+   "at": "2026-10-12T10:59:17+0800",
+   "source": "ossinsight_gh",
+   "stars": 10714
+  },
+  "baidu-baige/LoongForge": {
+   "at": "2026-10-12T10:59:18+0800",
+   "source": "ossinsight_gh",
+   "stars": 672
+  },
+  "bilawalsidhu/gods-eye-view": {
+   "at": "2026-10-12T10:59:18+0800",
+   "source": "ossinsight_gh",
+   "stars": 51864
+  },
+  "bilirec/bilirec": {
+   "at": "2026-10-12T10:59:19+0800",
+   "source": "ossinsight_gh",
+   "stars": 109
+  },
+  "boykopovar/AnyPS5": {
+   "at": "2026-10-12T10:59:20+0800",
+   "source": "ossinsight_gh",
+   "stars": 30298
+  },
+  "byoungd/up": {
+   "at": "2026-10-12T10:59:21+0800",
+   "source": "ossinsight_gh",
+   "stars": 68310
+  },
+  "caddyserver/caddy": {
+   "at": "2026-10-12T10:59:22+0800",
+   "source": "ossinsight_gh",
+   "stars": 77791
+  },
+  "calesthio/OpenMontage": {
+   "at": "2026-10-12T10:59:23+0800",
+   "source": "ossinsight_gh",
+   "stars": 67015
+  },
+  "cathrynlavery/diagram-design": {
+   "at": "2026-10-12T10:59:24+0800",
+   "source": "ossinsight_gh",
+   "stars": 50568
+  },
+  "chrislgarry/Apollo-11": {
+   "at": "2026-10-12T10:59:25+0800",
+   "source": "ossinsight_gh",
+   "stars": 74292
+  },
+  "citrolabs/ego-lite": {
+   "at": "2026-10-12T10:59:26+0800",
+   "source": "ossinsight_gh",
+   "stars": 17132
+  },
+  "cloudflare/cloudflare-os": {
+   "at": "2026-10-12T10:59:27+0800",
+   "source": "ossinsight_gh",
+   "stars": 11357
+  },
+  "cloudflare/quiche": {
+   "at": "2026-10-12T10:59:28+0800",
+   "source": "ossinsight_gh",
+   "stars": 12771
+  },
+  "cloudflare/security-audit-skill": {
+   "at": "2026-10-12T10:59:29+0800",
+   "source": "ossinsight_gh",
+   "stars": 28364
+  },
+  "cs341-illinois/coursebook": {
+   "at": "2026-10-12T10:59:29+0800",
+   "source": "ossinsight_gh",
+   "stars": 3817
+  },
+  "cursor/plugins": {
+   "at": "2026-10-12T10:59:30+0800",
+   "source": "ossinsight_gh",
+   "stars": 10916
+  },
+  "danyuchn/asd-ste100-skill": {
+   "at": "2026-10-12T10:59:31+0800",
+   "source": "ossinsight_gh",
+   "stars": 4513
+  },
+  "davila7/claude-code-templates": {
+   "at": "2026-10-12T10:59:32+0800",
+   "source": "ossinsight_gh",
+   "stars": 32569
+  },
+  "debpalash/VoiceStudio": {
+   "at": "2026-10-12T10:59:33+0800",
+   "source": "ossinsight_gh",
+   "stars": 58905
+  },
+  "dream-num/univer": {
+   "at": "2026-10-12T10:59:34+0800",
+   "source": "ossinsight_gh",
+   "stars": 22553
+  },
+  "earthtojake/text-to-cad": {
+   "at": "2026-10-12T10:59:36+0800",
+   "source": "ossinsight_gh",
+   "stars": 19319
+  },
+  "elastic/elasticsearch": {
+   "at": "2026-10-12T10:59:37+0800",
+   "source": "ossinsight_gh",
+   "stars": 78230
+  },
+  "flet-dev/flet": {
+   "at": "2026-10-12T10:59:39+0800",
+   "source": "ossinsight_gh",
+   "stars": 17317
+  },
+  "flutter/flutter": {
+   "at": "2026-10-12T10:59:40+0800",
+   "source": "ossinsight_gh",
+   "stars": 179815
+  },
+  "geeklee/srt-whiteboard-animation": {
+   "at": "2026-10-12T10:59:42+0800",
+   "source": "ossinsight_gh",
+   "stars": 4268
+  },
+  "harry0703/MoneyPrinterTurbo": {
+   "at": "2026-10-12T10:59:43+0800",
+   "source": "ossinsight_gh",
+   "stars": 129795
+  },
+  "heygen-com/hyperframes": {
+   "at": "2026-10-12T10:59:44+0800",
+   "source": "ossinsight_gh",
+   "stars": 61051
+  },
+  "iAmCorey/birth": {
+   "at": "2026-10-12T10:59:46+0800",
+   "source": "ossinsight_gh",
+   "stars": 584
+  },
+  "lhlGitHub/threejs-architecture-effects": {
+   "at": "2026-10-12T10:59:49+0800",
+   "source": "ossinsight_gh",
+   "stars": 528
+  },
+  "lyogavin/airllm": {
+   "at": "2026-10-12T10:59:50+0800",
+   "source": "ossinsight_gh",
+   "stars": 36544
+  },
+  "mattpocock/skills": {
+   "at": "2026-10-12T10:59:52+0800",
+   "source": "ossinsight_gh",
+   "stars": 286368
+  },
+  "michael-denyer/pstack-claude": {
+   "at": "2026-10-12T10:59:53+0800",
+   "source": "ossinsight_gh",
+   "stars": 1826
+  },
+  "morluto/rea": {
+   "at": "2026-10-12T10:59:53+0800",
+   "source": "ossinsight_gh",
+   "stars": 110463
+  },
+  "msitarzewski/agency-agents": {
+   "at": "2026-10-12T10:59:54+0800",
+   "source": "ossinsight_gh",
+   "stars": 159149
+  },
+  "multimodal-art-projection/YuE": {
+   "at": "2026-10-12T10:59:55+0800",
+   "source": "ossinsight_gh",
+   "stars": 11654
+  },
+  "mvschwarz/openrig": {
+   "at": "2026-10-12T10:59:56+0800",
+   "source": "ossinsight_gh",
+   "stars": 7000
+  },
+  "oblien/openship": {
+   "at": "2026-10-12T10:59:58+0800",
+   "source": "ossinsight_gh",
+   "stars": 14690
+  },
+  "okalachev/flix": {
+   "at": "2026-10-12T10:59:59+0800",
+   "source": "ossinsight_gh",
+   "stars": 2235
+  },
+  "pablostanley/yoinks": {
+   "at": "2026-10-12T11:00:00+0800",
+   "source": "ossinsight_gh",
+   "stars": 5755
+  },
+  "paperclipai/paperclip": {
+   "at": "2026-10-12T11:00:02+0800",
+   "source": "ossinsight_gh",
+   "stars": 100432
+  },
+  "pbakaus/impeccable": {
+   "at": "2026-10-12T11:00:03+0800",
+   "source": "ossinsight_gh",
+   "stars": 79913
+  },
+  "pingdotgg/t3code": {
+   "at": "2026-10-12T11:00:03+0800",
+   "source": "ossinsight_gh",
+   "stars": 27024
+  },
+  "pollen-robotics/microduck": {
+   "at": "2026-10-12T11:00:04+0800",
+   "source": "ossinsight_gh",
+   "stars": 9312
+  },
+  "pytorch/pytorch": {
+   "at": "2026-10-12T11:00:06+0800",
+   "source": "ossinsight_gh",
+   "stars": 104554
+  },
+  "rakyll/hey": {
+   "at": "2026-10-12T11:00:07+0800",
+   "source": "ossinsight_gh",
+   "stars": 20677
+  },
+  "ranxianglei/billion-context": {
+   "at": "2026-10-12T11:00:08+0800",
+   "source": "ossinsight_gh",
+   "stars": 928
+  },
+  "riba2534/claude-opus-5-5-demo": {
+   "at": "2026-10-12T11:00:09+0800",
+   "source": "ossinsight_gh",
+   "stars": 1058
+  },
+  "rohitg00/ai-engineering-from-scratch": {
+   "at": "2026-10-12T11:00:10+0800",
+   "source": "ossinsight_gh",
+   "stars": 67534
+  },
+  "sigoden/window-switcher": {
+   "at": "2026-10-12T11:00:11+0800",
+   "source": "ossinsight_gh",
+   "stars": 1212
+  },
+  "stablyai/orca": {
+   "at": "2026-10-12T11:00:11+0800",
+   "source": "ossinsight_gh",
+   "stars": 89848
+  },
+  "storytold/artcraft": {
+   "at": "2026-10-12T11:00:12+0800",
+   "source": "ossinsight_gh",
+   "stars": 18208
+  },
+  "t8y2/dbx": {
+   "at": "2026-10-12T11:00:14+0800",
+   "source": "ossinsight_gh",
+   "stars": 25846
+  },
+  "tester-army/e2e": {
+   "at": "2026-10-12T11:00:17+0800",
+   "source": "ossinsight_gh",
+   "stars": 9111
+  },
+  "thedotmack/claude-mem": {
+   "at": "2026-10-12T11:00:18+0800",
+   "source": "ossinsight_gh",
+   "stars": 99775
+  },
+  "tianma-if/edgeever": {
+   "at": "2026-10-12T11:00:18+0800",
+   "source": "ossinsight_gh",
+   "stars": 2204
+  },
+  "tile-ai/tilelang": {
+   "at": "2026-10-12T11:00:19+0800",
+   "source": "ossinsight_gh",
+   "stars": 8575
+  },
+  "trycua/cua": {
+   "at": "2026-10-12T11:00:20+0800",
+   "source": "ossinsight_gh",
+   "stars": 29404
+  },
+  "vectorize-io/hindsight": {
+   "at": "2026-10-12T11:00:22+0800",
+   "source": "ossinsight_gh",
+   "stars": 48478
+  },
+  "vercel/next.js": {
+   "at": "2026-10-12T11:00:23+0800",
+   "source": "ossinsight_gh",
+   "stars": 143143
+  },
+  "willfaust/Madeira": {
+   "at": "2026-10-12T11:00:24+0800",
+   "source": "ossinsight_gh",
+   "stars": 2152
+  },
+  "xingkongliang/skills-manager": {
+   "at": "2026-10-12T11:00:25+0800",
+   "source": "ossinsight_gh",
+   "stars": 6093
+  },
+  "yang0/handraw-style": {
+   "at": "2026-10-12T11:00:26+0800",
+   "source": "ossinsight_gh",
+   "stars": 5047
+  }
+ }
+}
